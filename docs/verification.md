@@ -66,5 +66,6 @@ v1.0.0 已在 Mac Apple Silicon、Mac Intel、Windows x64 上完成原生构建�
 - 本机使用已安装的 Electron 45.2.3（构建参数 `-c.electronDist=node_modules/electron/dist`）生成 arm64 DMG 和 ZIP；无需下载证书或配置密钥。
 - `codesign --verify --deep --strict` 通过，签名详情为 `Signature=adhoc`，标记包含 `adhoc,runtime`。打包后的应用通过全部4个桌面测试。
 - DMG 的 `hdiutil verify` 校验通过；以只读方式挂载后，映像内应用的完整签名校验及全部4个桌面测试也通过，完成后已推出映像。
-- CI 配置在 Mac arm64 / x64 上传安装包前校验完整签名和 ad-hoc 标记；本次尚未运行远程工作流，也未更新 GitHub 安装包。
+- Mac arm64、Mac x64、Windows x64 均已通过对应系统的测试、打包及实际应用验证；Mac 两种架构的完整签名和 ad-hoc 标记校验通过，见 [重新构建记录](https://github.com/mzh0221/offerdesk/actions/runs/42013823809)。
+- v1.1.1 正式版的5个安装文件和 SHA256SUMS.txt 已替换，发布任务核对了 GitHub 资产摘要与构建校验和。发布源码提交为 `8be90d4`；此前下载的旧文件需要重新下载。
 - 本地签名、启动和磁盘映像测试不代表 Gatekeeper 认可下载的应用；尚未提供 Apple 开发者身份认证或公证，首次下载后仍可能需要用户批准。
