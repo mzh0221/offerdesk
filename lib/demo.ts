@@ -82,7 +82,7 @@ export async function demoRequest(path: string, method = 'GET', body?: Record<st
         if (!item)
             throw new Error('导入不存在');
         if (action === 'extract')
-            throw new Error('演示模式未调用模型。截图已保存，请手动填写；配置云服务后可启用真实识别。');
+            throw new Error('截图已保存在本地，自动识别尚未启用，请手动填写。');
         return { ...item, attachments: rows.filter(r => r.kind === 'attachment' && r.import_id === id) };
     }
     throw new Error('未找到记录');

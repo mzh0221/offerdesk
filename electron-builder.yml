@@ -1,0 +1,32 @@
+appId: io.github.mzh0221.offerdesk
+productName: OfferDesk
+directories:
+  app: desktop
+  output: release
+  buildResources: desktop/resources
+files:
+  - main.cjs
+  - policy.cjs
+  - package.json
+  - renderer-dist/**/*
+  - '!node_modules/**/*'
+extraResources:
+  - from: LICENSE
+    to: LICENSE
+asar: true
+npmRebuild: false
+artifactName: OfferDesk-${version}-${os}-${arch}.${ext}
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+publish: null
