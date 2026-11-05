@@ -17,8 +17,10 @@ v1.0.0 已在 Mac Apple Silicon、Mac Intel、Windows x64 上完成原生构建�
 - [x] 旧版应用写入的数据可由清理后版本读取。
 - [x] 删除岗位及关联截图，其他岗位保留。
 - [x] Mac arm64 打包及打包后应用验证。
-- [ ] GitHub Mac arm64、Mac x64 和 Windows x64 对应系统构建与应用验证。
+- [x] GitHub Mac arm64、Mac x64 和 Windows x64 对应系统构建与应用验证，见 [v1.0.1 构建记录](https://github.com/mzh0221/offerdesk/actions/runs/41963408915)。
 - [x] 项目不再依赖网站框架、账户服务、云数据库、远程模型服务和签名凭据。
+
+清理后的 [v1.0.1 预览版](https://github.com/mzh0221/offerdesk/releases/tag/v1.0.1) 已公开发布，包含三平台安装包和 SHA-256 校验和。
 
 ## 仍需人工确认
 
