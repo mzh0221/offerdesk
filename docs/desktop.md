@@ -57,3 +57,7 @@ npm run desktop:dist -- --win --x64
 仓库为 `mzh0221/offerdesk`。`check.yml` 检查本地项目的测试、类型与构建；`desktop.yml` 在对应系统构建 Mac arm64、Mac x64 和 Windows x64 安装包，并启动打包后的应用进行同组验证。
 
 推送 `v*` 标签且版本匹配后，所有平台通过才发布预览 Release。发布附 SHA-256 校验和及平台说明。当前不配置发行签名或自动更新，预览包可能被系统提示或拦截。
+
+## 离线 OCR 资源
+
+`npm ci` 安装锁定的 Tesseract.js 和中英文模型包；`npm run build` 自动生成忽略提交的 `desktop/ocr-runtime/`，包含依赖、WASM、模型与许可证。安装包通过 extraResources 携带该目录，不依赖系统 Tesseract、Python 或运行时下载。独立 utility process 管理 OCR 工作线程，线程禁止网络访问；页面仅通过限定的 preload 接口传递图片、接收进度和取消。单张180秒超时，取消与退出都会终止任务。不要删除安装包中的 OCR 资源。

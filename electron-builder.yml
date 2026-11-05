@@ -7,10 +7,20 @@ directories:
 files:
   - main.cjs
   - policy.cjs
+  - preload.cjs
+  - ocr.cjs
+  - ocr-process.cjs
   - package.json
   - renderer-dist/**/*
   - '!node_modules/**/*'
 extraResources:
+  # Separate roots: electron-builder skips a node_modules directory at a copy root.
+  - from: desktop/ocr-runtime/node_modules
+    to: ocr-runtime/node_modules
+  - from: desktop/ocr-runtime/models
+    to: ocr-runtime/models
+  - from: desktop/ocr-runtime/offline-worker.cjs
+    to: ocr-runtime/offline-worker.cjs
   - from: LICENSE
     to: LICENSE
 asar: true

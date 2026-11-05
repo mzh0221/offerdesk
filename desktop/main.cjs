@@ -32,7 +32,7 @@ async function createWindow() {
     minHeight: 560,
     backgroundColor: '#f7f8fc',
     show: false,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true },
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true },
   });
   window.once('ready-to-show', () => window?.show());
   window.on('closed', () => { window = null; });
@@ -105,6 +105,7 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.on('will-download', (_event, item) => {
       if (!item.getURL().startsWith('blob:offerdesk://app/')) item.cancel();
     });
+    require('./ocr.cjs').registerOcr(() => window);
     menu();
     await createWindow();
     app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) void createWindow(); });

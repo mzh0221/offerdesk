@@ -1,6 +1,6 @@
 import { filterJobs, nextAppliedDate, type Job } from './domain';
 import { seedReferenceJobs } from './reference-jobs';
-import { importSchema, jobSchema } from './schema';
+import { fieldsSchema, importSchema, jobSchema } from './schema';
 type Row = {
     id: string;
     kind: string;
@@ -82,6 +82,12 @@ export async function localRequest(path: string, method = 'GET', body?: Record<s
         const item = await get(id);
         if (!item)
             throw new Error('导入不存在');
+        if (item.kind !== 'import') throw new Error('导入不存在');
+        if (method === 'PATCH') {
+            const updated = { ...item, raw_text: importSchema.parse({ input_type: item.input_type, raw_text: body?.raw_text }).raw_text, extracted: fieldsSchema.parse(body?.extracted), state: item.state === 'saved' ? 'saved' : 'review' };
+            await put(updated);
+            return updated;
+        }
         return { ...item, attachments: rows.filter(r => r.kind === 'attachment' && r.import_id === id) };
     }
     throw new Error('未找到记录');
