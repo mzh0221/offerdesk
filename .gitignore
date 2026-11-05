@@ -11,3 +11,9 @@ desktop/renderer-dist/
 release/
 test-results/
 playwright-report/
+*.p12
+*.pfx
+*.p8
+*.key
+*.csr
+*.certSigningRequest

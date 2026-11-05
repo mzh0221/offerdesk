@@ -16,7 +16,8 @@
     "desktop:start": "npm run desktop:build && electron desktop",
     "desktop:pack": "npm run desktop:build && electron-builder --config electron-builder.yml --dir --publish never",
     "desktop:dist": "npm run desktop:build && electron-builder --config electron-builder.yml --publish never",
-    "desktop:test": "npm run desktop:build && playwright test --config playwright.desktop.config.ts"
+    "desktop:test": "npm run desktop:build && playwright test --config playwright.desktop.config.ts",
+    "desktop:sign:mac": "npm run desktop:build && electron-builder --config electron-builder.signed.mac.cjs --mac --publish never"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",

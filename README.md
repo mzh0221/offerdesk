@@ -72,6 +72,7 @@ npm run typecheck
 
 - [当前需求](docs/requirements.md)：开源桌面应用的范围、功能目标和验收标准。
 - [桌面应用与发行](docs/desktop.md)：平台、数据目录、构建与 GitHub Releases。
+- [发行签名](docs/signing.md)：Mac 会员与证书申请、自动签名流程，以及 Windows 开源签名服务。
 - [贡献说明](CONTRIBUTING.md)：开发与提交要求。
 - [本地验收清单](docs/verification.md)：已完成检查和待验收事项。
 - [初始岗位来源](docs/reference-jobs.md)：参考岗位与数据更新方式。
