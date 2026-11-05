@@ -1,0 +1,25 @@
+name: Update release notes
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/release-notes.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update published release description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          RELEASE_TAG="$(node -p "'v' + require('./desktop/package.json').version")"
+          gh release edit "$RELEASE_TAG" --notes-file docs/release-notes.md
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > updated-release.json
+          node -e "const fs = require('node:fs'); const actual = JSON.parse(fs.readFileSync('updated-release.json', 'utf8')).body; const expected = fs.readFileSync('docs/release-notes.md', 'utf8'); if (actual.trimEnd() !== expected.trimEnd()) process.exit(1)"

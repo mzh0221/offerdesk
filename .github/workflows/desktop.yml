@@ -78,6 +78,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: installers
@@ -100,4 +101,4 @@ jobs:
             actual="$(jq -r --arg name "$filename" '.assets[] | select(.name == $name) | .digest' uploaded-release.json)"
             test "$actual" = "sha256:$expected"
           done < installers/SHA256SUMS.txt
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --title "OfferDesk $RELEASE_TAG" --notes "Mac Apple Silicon / Intel 与 Windows x64 本地应用，无需 Node.js 或云服务。岗位、投递记录与截图保存在本机，支持内置中英文模型的离线 OCR 与岗位预填，保存前请核对识别结果。Mac 安装包已重新构建，使用免费 ad-hoc 完整性签名，尚未获得 Apple Developer ID 认证或公证；Windows 未配置证书签名，系统可能提示开发者无法验证或阻止运行。各平台安装包均通过构建与应用重启测试，Mac 完整签名检查通过。下载时请使用更新后的 SHA256SUMS.txt 校验文件。详细说明见 docs/desktop.md。"
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --title "OfferDesk $RELEASE_TAG" --notes-file docs/release-notes.md
