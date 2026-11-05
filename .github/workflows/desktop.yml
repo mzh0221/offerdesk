@@ -44,6 +44,14 @@ jobs:
         run: npm run desktop:dist -- --${{ matrix.platform }} --${{ matrix.arch }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify macOS ad-hoc signature
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          APP_BUNDLE="release/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/OfferDesk.app"
+          codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+          SIGNATURE_INFO="$(codesign --display --verbose=4 "$APP_BUNDLE" 2>&1)"
+          [[ "$SIGNATURE_INFO" == *"Signature=adhoc"* ]]
       - name: Smoke-test installed application bundle
         shell: bash
         run: |
@@ -76,10 +84,20 @@ jobs:
           merge-multiple: true
       - name: Generate checksums
         run: cd installers && sha256sum * > SHA256SUMS.txt
-      - name: Publish preview release
+      - name: Publish or replace release assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" installers/* --prerelease --title "OfferDesk $RELEASE_TAG · 桌面预览版" --notes "Mac Apple Silicon / Intel 与 Windows x64 本地应用。下载安装后直接打开，无需 Node.js 或云服务。岗位、投递记录与截图保存在本机，支持内置中英文模型的离线 OCR 与岗位预填，保存前请核对识别结果。当前预览版未完成发行签名，系统可能提示开发者无法验证或阻止运行。各平台安装包均通过构建与应用重启测试，校验和见 SHA256SUMS.txt。详细说明见 docs/desktop.md。"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" installers/* --clobber
+          else
+            gh release create "$RELEASE_TAG" installers/* --draft --title "OfferDesk $RELEASE_TAG"
+          fi
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > uploaded-release.json
+          while read -r expected filename; do
+            actual="$(jq -r --arg name "$filename" '.assets[] | select(.name == $name) | .digest' uploaded-release.json)"
+            test "$actual" = "sha256:$expected"
+          done < installers/SHA256SUMS.txt
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --title "OfferDesk $RELEASE_TAG" --notes "Mac Apple Silicon / Intel 与 Windows x64 本地应用，无需 Node.js 或云服务。岗位、投递记录与截图保存在本机，支持内置中英文模型的离线 OCR 与岗位预填，保存前请核对识别结果。Mac 安装包已重新构建，使用免费 ad-hoc 完整性签名，尚未获得 Apple Developer ID 认证或公证；Windows 未配置证书签名，系统可能提示开发者无法验证或阻止运行。各平台安装包均通过构建与应用重启测试，Mac 完整签名检查通过。下载时请使用更新后的 SHA256SUMS.txt 校验文件。详细说明见 docs/desktop.md。"

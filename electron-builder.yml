@@ -27,6 +27,10 @@ asar: true
 npmRebuild: false
 artifactName: OfferDesk-${version}-${os}-${arch}.${ext}
 mac:
+  # Free local integrity signature; does not provide Developer ID or notarization.
+  identity: "-"
+  notarize: false
+  hardenedRuntime: true
   category: public.app-category.productivity
   target:
     - dmg

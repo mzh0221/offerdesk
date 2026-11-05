@@ -45,6 +45,22 @@ npm run desktop:dist -- --mac --x64
 npm run desktop:dist -- --win --x64
 ```
 
+### Mac 免费临时签名
+
+当前源码的 Mac 构建配置使用 `identity: "-"` 生成 ad-hoc 签名，不需要开发者账号、证书或签名密钥，也不请求 Apple 公证。保留 Hardened Runtime；Electron 运行所需的 JIT 和库加载权限由当前锁定的 electron-builder 默认权限模板提供，页面沙箱和上下文隔离仍然启用。
+
+Apple 芯片 Mac 打包后，可检查签名并启动应用：
+
+```sh
+codesign --verify --deep --strict --verbose=2 release/mac-arm64/OfferDesk.app
+codesign --display --verbose=4 release/mac-arm64/OfferDesk.app
+open release/mac-arm64/OfferDesk.app
+```
+
+签名详情应包含 `Signature=adhoc`。Intel Mac 的应用路径为 `release/mac/OfferDesk.app`。CI 在两种 Mac 架构上均校验签名，再启动实际应用进行测试，签名不通过时不上传安装包。
+
+ad-hoc 仅提供代码完整性签名，不提供 Apple 开发者身份认证，不能保证浏览器下载的应用免于 Gatekeeper 拦截。用户仍可能需要在“系统设置 → 隐私与安全性”中手动批准。此前已发布的 v1.1.1 安装包不会因为修改源码配置而获得签名；需要重新构建并发布新的安装包。
+
 ## 实际应用验证
 
 `desktop:test` 在独立临时数据目录中启动真实窗口，验证岗位与截图保存、原图查看、状态和备注修改、退出重启及删除。不会操作个人现有数据。
@@ -56,7 +72,7 @@ npm run desktop:dist -- --win --x64
 
 仓库为 `mzh0221/offerdesk`。`check.yml` 检查本地项目的测试、类型与构建；`desktop.yml` 在对应系统构建 Mac arm64、Mac x64 和 Windows x64 安装包，并启动打包后的应用进行同组验证。
 
-推送 `v*` 标签且版本匹配后，所有平台通过才发布预览 Release。发布附 SHA-256 校验和及平台说明。当前不配置发行签名或自动更新，预览包可能被系统提示或拦截。
+推送 `v*` 标签且版本匹配后，所有平台通过才发布正式 Release。发布附 SHA-256 校验和及平台说明；若同版本 Release 已存在，则替换同名安装包与校验和，并比对 GitHub 资产摘要。当前 Mac 构建使用免费 ad-hoc 签名，未配置 Developer ID、公证、Windows 证书签名或自动更新，安装包可能被系统提示或拦截。
 
 ## 离线 OCR 资源
 

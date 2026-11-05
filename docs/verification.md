@@ -1,6 +1,6 @@
 # 本地项目验证记录
 
-更新日期：2026-11-05。当前只维护 Mac / Windows 本地桌面应用，数据保存在应用目录。本地 OCR 已在当前源码实现；备份恢复与发行签名不属于当前范围。
+更新日期：2026-11-05。当前只维护 Mac / Windows 本地桌面应用，数据保存在应用目录。本地 OCR 与 Mac 免费 ad-hoc 签名已在当前源码实现；备份恢复、Developer ID、公证与 Windows 证书签名不属于当前范围。
 
 ## 历史已验证基线
 
@@ -58,3 +58,13 @@ v1.0.0 已在 Mac Apple Silicon、Mac Intel、Windows x64 上完成原生构建�
 
 - 首次启动不再播种示例或公开岗位，列表从空白开始；既有 IndexedDB 记录保留，不执行清空或迁移。
 - 桌面测试验证全新临时用户目录启动后岗位数为0，并验证常规新增、删除和重启行为。
+
+## Mac 免费临时签名（当前源码）
+
+- Mac 构建使用 `identity: "-"`，关闭公证，保留 Hardened Runtime，使用锁定的 electron-builder 默认 Electron 权限模板。
+- 29项单元测试、类型检查、生产构建通过；工作流 YAML 可解析。
+- 本机使用已安装的 Electron 45.2.3（构建参数 `-c.electronDist=node_modules/electron/dist`）生成 arm64 DMG 和 ZIP；无需下载证书或配置密钥。
+- `codesign --verify --deep --strict` 通过，签名详情为 `Signature=adhoc`，标记包含 `adhoc,runtime`。打包后的应用通过全部4个桌面测试。
+- DMG 的 `hdiutil verify` 校验通过；以只读方式挂载后，映像内应用的完整签名校验及全部4个桌面测试也通过，完成后已推出映像。
+- CI 配置在 Mac arm64 / x64 上传安装包前校验完整签名和 ad-hoc 标记；本次尚未运行远程工作流，也未更新 GitHub 安装包。
+- 本地签名、启动和磁盘映像测试不代表 Gatekeeper 认可下载的应用；尚未提供 Apple 开发者身份认证或公证，首次下载后仍可能需要用户批准。
