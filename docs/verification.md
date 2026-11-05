@@ -39,5 +39,7 @@ v1.0.0 已在 Mac Apple Silicon、Mac Intel、Windows x64 上完成原生构建�
 - 验证编辑原文、本地规则预填、表单核对保存、完全退出重启后原文和原图保留；原有手动录入、状态备注及关联删除测试通过。
 - 使用旧 v1.0.0 ASAR 写入临时数据，再由当前 Mac 应用包读取，升级兼容测试通过；没有访问真实用户数据目录。
 - OCR 依赖资源约55MB（未压缩），构建时生成，不提交二进制资源；安装后无需下载或系统 OCR 软件。
-- Windows x64、Mac Intel 的本次 OCR 原生包尚未在本机验证，对应 Actions 已包含同一套 OCR 测试；历史版本的构建记录不代表本次功能已验证。
+- Mac Apple Silicon、Mac Intel 与 Windows x64 均已通过对应系统的单元测试、类型检查、源码应用测试、安装包构建及打包后 OCR / 重启保存测试，见 [v1.1.0 构建记录](https://github.com/mzh0221/offerdesk/actions/runs/41975940807)。
 - 实际招聘平台复杂排版、模糊字和长截图的准确率仍需更多样本评估，合成截图测试不代表所有截图都能准确识别。
+
+[v1.1.0 预览版](https://github.com/mzh0221/offerdesk/releases/tag/v1.1.0) 已发布，含 Mac arm64 / x64 的 DMG、ZIP，Windows x64 EXE 及 SHA256SUMS.txt。发布源码提交为 `21b59d2`。
