@@ -54,7 +54,7 @@ test('旧数据库只追加新批次，保留改动、自建岗位及已删除�
     assert.equal(records.size, size);
     assert.ok(!records.has(newBatch.rows[0].id));
 });
-test('空库初始化20条，重复执行不新增；写入中断可重试', async () => {
+test('岗位资料生成助手保留兼容性，不会由应用启动自动执行', async () => {
     const records = new Map<string, any>();
     let writes = 0;
     const remove = async (id: string) => { records.delete(id); };

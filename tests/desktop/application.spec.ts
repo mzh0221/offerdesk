@@ -21,7 +21,7 @@ test('安装包界面离线运行，岗位、投递记录和截图在完整重�
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     expect(page.url()).toBe('offerdesk://app/');
-    await expect(page.locator('.jobs-table tbody tr')).toHaveCount(20);
+    await expect(page.locator('.jobs-table tbody tr')).toHaveCount(0);
     expect(await page.evaluate(() => typeof (globalThis as Record<string, unknown>).require)).toBe('undefined');
     expect(await page.evaluate(async () => { try { await fetch('https://example.com'); return false; } catch { return true; } })).toBe(true);
 
@@ -83,7 +83,7 @@ test('安装包界面离线运行，岗位、投递记录和截图在完整重�
       };
     }))).toBe(0);
     await page.getByLabel('搜索公司、岗位或技能').fill('');
-    await expect(page.locator('.jobs-table tbody tr')).toHaveCount(20);
+    await expect(page.locator('.jobs-table tbody tr')).toHaveCount(0);
     await page.screenshot({ path: 'test-results/desktop-home.png', fullPage: true });
     expect(errors).toEqual([]);
   } finally {

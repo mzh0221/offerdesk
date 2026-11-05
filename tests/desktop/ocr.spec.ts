@@ -22,7 +22,7 @@ test('全新环境离线 OCR、编辑预填、原文保存与重启', async () =
       ['OfferDesk Internship', 'Software Engineer', 'Salary 200 per day', 'TypeScript React', '公司名称：示例科技', '岗位名称：开发实习生'].forEach((text, i) => ctx.fillText(text, 50, 90 + i * 110));
       return canvas.toDataURL('image/webp', 0.98).split(',')[1];
     });
-    await page.getByRole('button', { name: '上传岗位截图', exact: true }).click();
+    await page.locator('.screenshot-action').click();
     const blank = await page.evaluate(() => {
       const canvas = document.createElement('canvas'); canvas.width = 500; canvas.height = 200;
       const ctx = canvas.getContext('2d')!; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 500, 200);
@@ -40,10 +40,29 @@ test('全新环境离线 OCR、编辑预填、原文保存与重启', async () =
     await expect(raw).toBeVisible({ timeout: 120000 });
     await expect(raw).toHaveValue(/Software Engineer/, { timeout: 120000 });
     await expect(page.getByText(/blank.png：未识别到文字/)).toBeVisible();
+    const corrected = '人工核对后纠正的招聘信息';
+    await raw.fill(corrected);
     await page.getByRole('button', { name: '重试未完成截图', exact: true }).click();
     await expect(page.getByRole('button', { name: '重试未完成截图', exact: true })).toBeEnabled();
-    await expect(raw).toHaveValue(/Software Engineer/, { timeout: 120000 });
-    expect((await raw.inputValue()).replace(/\s/g, '')).toContain('示例科技');
+    await expect(raw).toHaveValue(corrected);
+    // A successful retry also leaves edits untouched and exposes its new text separately.
+    await page.evaluate(() => {
+      const image = document.querySelector('.upload-preview img') as HTMLImageElement;
+      const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      canvas.getContext('2d')!.drawImage(image, 0, 0);
+      // Replace only the File returned to OCR; the UI selection and persisted files stay real.
+      const original = createImageBitmap;
+      (window as any).__originalBitmap = original;
+      window.createImageBitmap = (async (image: ImageBitmapSource) => {
+        const bitmap = await original(image);
+        if (bitmap.width === 500 && bitmap.height === 200) { bitmap.close(); return original(canvas); }
+        return bitmap;
+      }) as typeof createImageBitmap;
+    });
+    await page.getByRole('button', { name: '重试未完成截图', exact: true }).click();
+    await expect(page.getByLabel('重试新增文字（请复制需要的内容到识别原文）')).toHaveValue(/Software Engineer/, { timeout: 120000 });
+    await expect(raw).toHaveValue(corrected);
+    await page.evaluate(() => { window.createImageBitmap = (window as any).__originalBitmap; });
     await raw.fill('公司名称：离线识别测试\n岗位名称：开发实习生\n城市：杭州\n薪资：200元/天\n任职要求：\nTypeScript React');
     await page.getByRole('button', { name: '根据文字预填', exact: true }).click();
     await expect(page.getByLabel(/公司名称/)).toHaveValue('离线识别测试');

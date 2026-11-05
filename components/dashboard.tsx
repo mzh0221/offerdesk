@@ -90,7 +90,7 @@ export default function Dashboard() {
                     <div><h1>岗位与投递</h1><p>截图收集岗位，直接跟进投递。</p></div>
                     <div className="entry-actions"><button className="secondary" onClick={() => openAdd('text')}><Clipboard size={15}/>文字录入</button><button className="primary screenshot-action" onClick={() => openAdd()}><ImagePlus size={18}/>上传岗位截图</button></div>
                 </section>
-                <div className="local-inline"><span className="local-label">本地</span><span>已整理长三角公开实习岗位，详情附招聘原链接。截图自动识别尚未启用。</span><button className="text-button" onClick={() => setHelp(true)}>说明</button></div>
+                <div className="local-inline"><span className="local-label">本地</span><span>岗位列表保存在本机，截图可用内置 OCR 离线识别。</span><button className="text-button" onClick={() => setHelp(true)}>说明</button></div>
                 <section className="jobs-section" aria-label="岗位列表">
                     <div className="list-navigation"><nav className="status-tabs" aria-label="按投递状态筛选">
                         <button aria-pressed={!status} className={!status ? 'selected' : ''} onClick={() => setStatus('')}>全部岗位<span>{facets.length}</span></button>
@@ -123,6 +123,6 @@ export default function Dashboard() {
                 </section>
             </div>
         </main>
-    {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}{add && <AddJob initialInput={entryMode} resume={resume} onClose={closeAdd} onSaved={() => { closeAdd(); setPending(null); reload(); setToast('新岗位已收进工作台'); }}/>}{detail && <JobDetail id={detail} onClose={() => setDetail(null)} onChanged={reload}/>}{help && <Dialog title="使用你的岗位投递台" onClose={() => setHelp(false)}><div className="dialog-content guide"><span className="mini-icon"><BriefcaseBusiness size={24}/></span><h3>三步，把岗位整理清楚。</h3><ol><li><strong>收集</strong><p>上传同一岗位的1—5张截图，或粘贴招聘文字。截图可以拖拽、粘贴、排序。</p></li><li><strong>核对</strong><p>对照截图或招聘原文填写公司、岗位和要求，没有写明的条件可以留空。</p></li><li><strong>跟进</strong><p>打开岗位详情，修改状态、日期和备注；招聘原文和截图随时可以回看。</p></li></ol><div className="notice">当前为本地模式，初始岗位来自企业公开招聘信息，详情可查看来源和核查日期；是否仍接收申请以招聘方为准。岗位与截图仅保存在当前设备，不会同步到其他设备；截图自动识别尚未启用。</div><button className="primary full" onClick={() => setHelp(false)}>开始整理<ArrowRight size={15}/></button></div></Dialog>}
+    {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}{add && <AddJob initialInput={entryMode} resume={resume} onClose={closeAdd} onSaved={() => { closeAdd(); setPending(null); reload(); setToast('新岗位已收进工作台'); }}/>}{detail && <JobDetail id={detail} onClose={() => setDetail(null)} onChanged={reload}/>}{help && <Dialog title="使用你的岗位投递台" onClose={() => setHelp(false)}><div className="dialog-content guide"><span className="mini-icon"><BriefcaseBusiness size={24}/></span><h3>三步，把岗位整理清楚。</h3><ol><li><strong>收集</strong><p>上传同一岗位的1—5张截图，或粘贴招聘文字。截图可以拖拽、粘贴、排序。</p></li><li><strong>核对</strong><p>对照截图或招聘原文填写公司、岗位和要求，没有写明的条件可以留空。</p></li><li><strong>跟进</strong><p>打开岗位详情，修改状态、日期和备注；招聘原文和截图随时可以回看。</p></li></ol><div className="notice">当前为本地模式，下载后从空白岗位列表开始。岗位与截图仅保存在当前设备，不会同步到其他设备。</div><button className="primary full" onClick={() => setHelp(false)}>开始整理<ArrowRight size={15}/></button></div></Dialog>}
   </div>;
 }

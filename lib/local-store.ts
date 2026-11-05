@@ -1,5 +1,4 @@
 import { filterJobs, nextAppliedDate, type Job } from './domain';
-import { seedReferenceJobs } from './reference-jobs';
 import { fieldsSchema, importSchema, jobSchema } from './schema';
 type Row = {
     id: string;
@@ -12,20 +11,47 @@ const all = () => records<Row[]>('readonly', s => s.getAll());
 const put = (row: unknown) => records('readwrite', s => s.put(row));
 const get = (id: string) => records<Row | undefined>('readonly', s => s.get(id));
 const del = (id: string) => records('readwrite', s => s.delete(id));
-export async function saveScreenshots(importId: string, files: File[]) { for (const [position, file] of files.entries()) {
-    const id = crypto.randomUUID();
-    await put({ id, kind: 'attachment', import_id: importId, path: id, name: file.name, mime: file.type, size: file.size, position, blob: file });
-} }
+// All related rows commit together; a failed write leaves the previous draft intact.
+async function writeRows<T>(run: (store: IDBObjectStore, rows: Row[], result: (value: T) => void) => void): Promise<T> {
+    const db = await database();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction('records', 'readwrite');
+        let value: T;
+        let failure: unknown;
+        tx.oncomplete = () => { db.close(); resolve(value); };
+        tx.onabort = () => { db.close(); reject(failure || new Error('保存失败，可能是本地存储空间不足')); };
+        const store = tx.objectStore('records');
+        // Read and mutate in the same transaction, including lookup-dependent deletes.
+        const request = store.getAll();
+        request.onsuccess = () => {
+            try { run(store, request.result, next => { value = next; }); } catch (error) { failure = error; tx.abort(); }
+        };
+    });
+}
+const orderedAttachments = (rows: Row[], importId: unknown) => rows.filter(row => row.kind === 'attachment' && row.import_id === importId).sort((a, b) => Number(a.position) - Number(b.position) || a.id.localeCompare(b.id));
+
+export async function saveImportDraft(id: string | null, body: Record<string, unknown>, files?: File[]) {
+    const data = { ...importSchema.parse(body), extracted: fieldsSchema.parse(body.extracted) };
+    return writeRows<Row>((store, rows, result) => {
+        const item = id ? rows.find(row => row.id === id && row.kind === 'import') : undefined;
+        if (id && !item) throw new Error('导入不存在');
+        if (item?.state === 'saved' || (id !== null && rows.some(row => row.kind === 'job' && row.import_id === id))) throw new Error('该导入已保存，请在岗位详情中修改');
+        const record = { ...item, ...data, id: id || crypto.randomUUID(), kind: 'import', state: 'review', created_at: item?.created_at || new Date().toISOString() };
+        store.put(record);
+        if (files !== undefined) {
+            for (const row of orderedAttachments(rows, record.id)) store.delete(row.id);
+            files.forEach((file, position) => {
+                const attachmentId = crypto.randomUUID();
+                store.put({ id: attachmentId, path: attachmentId, kind: 'attachment', import_id: record.id, name: file.name, mime: file.type, size: file.size, position, blob: file });
+            });
+        }
+        result(record);
+    });
+}
 export async function getScreenshotUrl(id: string) { const row = await get(id); if (!row?.blob)
     throw new Error('截图不存在'); return URL.createObjectURL(row.blob as Blob); }
-let seedTask: Promise<void> | null = null;
-export function initializeLocalStore(): Promise<void> {
-    if (seedTask) return seedTask;
-    seedTask = (async () => {
-        await seedReferenceJobs(await all(), put, del);
-    })().catch(error => { seedTask = null; throw error; });
-    return seedTask;
-}
+// Opening the app must not insert demo or reference jobs into a new user's library.
+export async function initializeLocalStore(): Promise<void> {}
 export async function localRequest(path: string, method = 'GET', body?: Record<string, unknown>): Promise<any> {
     const url = new URL(path, 'http://local');
     const [resource, id] = url.pathname.split('/').filter(Boolean);
@@ -56,7 +82,7 @@ export async function localRequest(path: string, method = 'GET', body?: Record<s
         if (!job)
             throw new Error('岗位不存在');
         if (method === 'GET')
-            return { ...job, raw_text: rows.find(r => r.id === job.import_id)?.raw_text || '', attachments: rows.filter(r => r.kind === 'attachment' && r.import_id === job.import_id) };
+            return { ...job, raw_text: rows.find(r => r.id === job.import_id)?.raw_text || '', attachments: orderedAttachments(rows, job.import_id) };
         if (method === 'PATCH') {
             const merged: Row = { ...job, ...jobSchema.parse({ ...job, ...body }), id, kind: 'job', updated_at: new Date().toISOString() };
             merged.applied_at = nextAppliedDate(merged.applied_at as string | null, merged.status as Job['status']);
@@ -64,12 +90,15 @@ export async function localRequest(path: string, method = 'GET', body?: Record<s
             return merged;
         }
         if (method === 'DELETE') {
-            await del(id);
-            if (job.import_id) {
-                for (const row of rows.filter(r => r.import_id === job.import_id))
-                    await del(row.id);
-                await del(job.import_id as string);
-            }
+            await writeRows<void>((store, current, result) => {
+                const target = current.find(row => row.id === id && row.kind === 'job');
+                if (!target) throw new Error('岗位不存在');
+                store.delete(id);
+                if (target.import_id) {
+                    for (const row of current.filter(row => row.id === target.import_id || row.import_id === target.import_id)) store.delete(row.id);
+                }
+                result(undefined);
+            });
             return { ok: true };
         }
     }
@@ -88,7 +117,7 @@ export async function localRequest(path: string, method = 'GET', body?: Record<s
             await put(updated);
             return updated;
         }
-        return { ...item, attachments: rows.filter(r => r.kind === 'attachment' && r.import_id === id) };
+        return { ...item, attachments: orderedAttachments(rows, id) };
     }
     throw new Error('未找到记录');
 }
