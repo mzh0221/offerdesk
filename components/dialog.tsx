@@ -1,12 +1,10 @@
-'use client';
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
-export default function Dialog({ children, title, onClose, wide = false, drawer = false, expanded = false, footer }: {
+export default function Dialog({ children, title, onClose, wide = false, expanded = false, footer }: {
     children: React.ReactNode;
     title: string;
     onClose: () => void;
     wide?: boolean;
-    drawer?: boolean;
     expanded?: boolean;
     footer?: React.ReactNode;
 }) {
@@ -30,6 +28,6 @@ export default function Dialog({ children, title, onClose, wide = false, drawer 
             first.focus();
         }
     } } document.addEventListener('keydown', key); return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', key); previous?.focus(); }; }, []);
-    return <div className={`overlay ${drawer ? 'drawer-overlay' : ''} ${expanded ? 'detail-overlay' : ''}`} onMouseDown={e => { if (e.target === e.currentTarget)
-        onClose(); }}><div className={`dialog ${wide ? 'dialog-wide' : ''} ${drawer ? 'drawer' : ''} ${expanded ? 'detail-panel' : ''}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}><header className="dialog-header"><h2>{title}</h2><button className="icon-button" aria-label="关闭" onClick={onClose}><X size={20}/></button></header>{children}{footer}</div></div>;
+    return <div className={`overlay ${expanded ? 'detail-overlay' : ''}`} onMouseDown={e => { if (e.target === e.currentTarget)
+        onClose(); }}><div className={`dialog ${wide ? 'dialog-wide' : ''} ${expanded ? 'detail-panel' : ''}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}><header className="dialog-header"><h2>{title}</h2><button className="icon-button" aria-label="关闭" onClick={onClose}><X size={20}/></button></header>{children}{footer}</div></div>;
 }

@@ -82,4 +82,4 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" installers/* --prerelease --title "OfferDesk $RELEASE_TAG · 桌面预览版" --notes "Mac Apple Silicon / Intel 与 Windows x64 本地应用。下载安装后直接打开，无需 Node.js 或云服务。当前为未完成发行签名的预览版，系统可能阻止运行；备份恢复、网页旧数据迁移和自动识别尚未实现。各平台安装包均通过构建与应用重启测试，校验和见 SHA256SUMS.txt。详细说明见 docs/desktop.md。"
+          gh release create "$RELEASE_TAG" installers/* --prerelease --title "OfferDesk $RELEASE_TAG · 桌面预览版" --notes "Mac Apple Silicon / Intel 与 Windows x64 本地应用。下载安装后直接打开，无需 Node.js 或云服务。岗位、投递记录与截图保存在本机，自动识别尚未实现。当前预览版未完成发行签名，系统可能提示开发者无法验证或阻止运行。各平台安装包均通过构建与应用重启测试，校验和见 SHA256SUMS.txt。详细说明见 docs/desktop.md。"

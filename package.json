@@ -1,33 +1,27 @@
 {
   "name": "offerdesk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22.18.0"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "typecheck": "next typegen && tsc --noEmit",
+    "dev": "npm run desktop:start",
+    "start": "npm run desktop:start",
+    "build": "npm run desktop:build",
+    "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "desktop:build": "vite build --config vite.desktop.config.ts",
     "desktop:start": "npm run desktop:build && electron desktop",
     "desktop:pack": "npm run desktop:build && electron-builder --config electron-builder.yml --dir --publish never",
     "desktop:dist": "npm run desktop:build && electron-builder --config electron-builder.yml --publish never",
-    "desktop:test": "npm run desktop:build && playwright test --config playwright.desktop.config.ts",
-    "desktop:sign:mac": "npm run desktop:build && electron-builder --config electron-builder.signed.mac.cjs --mac --publish never"
+    "desktop:test": "npm run desktop:build && playwright test --config playwright.desktop.config.ts"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.7.0",
-    "@supabase/supabase-js": "^2.57.4",
-    "@tailwindcss/postcss": "^4.1.0",
     "lucide-react": "^0.468.0",
-    "next": "^16.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.0",
     "zod": "^4.1.11"
   },
   "devDependencies": {
@@ -38,7 +32,9 @@
     "electron": "45.2.3",
     "electron-builder": "26.18.0",
     "typescript": "^5.9.0",
-    "vite": "8.3.5"
+    "vite": "8.3.5",
+    "@tailwindcss/postcss": "^4.1.0",
+    "tailwindcss": "^4.1.0"
   },
   "description": "开源的本地岗位与投递管理桌面应用",
   "author": "mzh0221",

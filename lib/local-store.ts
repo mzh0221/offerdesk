@@ -1,33 +1,34 @@
 import { filterJobs, nextAppliedDate, type Job } from './domain';
 import { seedReferenceJobs } from './reference-jobs';
+import { importSchema, jobSchema } from './schema';
 type Row = {
     id: string;
     kind: string;
     [key: string]: unknown;
 };
-function database(): Promise<IDBDatabase> { return new Promise((resolve, reject) => { const request = indexedDB.open('offerdesk-local-v1', 1); request.onupgradeneeded = () => request.result.createObjectStore('records', { keyPath: 'id' }); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(new Error('本地存储不可用，请检查浏览器隐私设置')); }); }
-async function records<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> { const db = await database(); return new Promise((resolve, reject) => { const tx = db.transaction('records', mode); const request = run(tx.objectStore('records')); let value: T; request.onsuccess = () => { value = request.result; }; tx.oncomplete = () => { db.close(); resolve(value); }; tx.onerror = () => { db.close(); reject(new Error('保存失败，可能是浏览器存储空间不足')); }; }); }
+function database(): Promise<IDBDatabase> { return new Promise((resolve, reject) => { const request = indexedDB.open('offerdesk-local-v1', 1); request.onupgradeneeded = () => request.result.createObjectStore('records', { keyPath: 'id' }); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(new Error('本地数据存储不可用，请重新打开应用')); }); }
+async function records<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> { const db = await database(); return new Promise((resolve, reject) => { const tx = db.transaction('records', mode); const request = run(tx.objectStore('records')); let value: T; request.onsuccess = () => { value = request.result; }; tx.oncomplete = () => { db.close(); resolve(value); }; tx.onerror = () => { db.close(); reject(new Error('保存失败，可能是本地存储空间不足')); }; }); }
 const all = () => records<Row[]>('readonly', s => s.getAll());
 const put = (row: unknown) => records('readwrite', s => s.put(row));
 const get = (id: string) => records<Row | undefined>('readonly', s => s.get(id));
 const del = (id: string) => records('readwrite', s => s.delete(id));
-export async function demoUpload(importId: string, files: File[]) { for (const [position, file] of files.entries()) {
+export async function saveScreenshots(importId: string, files: File[]) { for (const [position, file] of files.entries()) {
     const id = crypto.randomUUID();
     await put({ id, kind: 'attachment', import_id: importId, path: id, name: file.name, mime: file.type, size: file.size, position, blob: file });
 } }
-export async function demoImage(id: string) { const row = await get(id); if (!row?.blob)
+export async function getScreenshotUrl(id: string) { const row = await get(id); if (!row?.blob)
     throw new Error('截图不存在'); return URL.createObjectURL(row.blob as Blob); }
 let seedTask: Promise<void> | null = null;
-export function seedDemo(): Promise<void> {
+export function initializeLocalStore(): Promise<void> {
     if (seedTask) return seedTask;
     seedTask = (async () => {
         await seedReferenceJobs(await all(), put, del);
     })().catch(error => { seedTask = null; throw error; });
     return seedTask;
 }
-export async function demoRequest(path: string, method = 'GET', body?: Record<string, unknown>): Promise<any> {
+export async function localRequest(path: string, method = 'GET', body?: Record<string, unknown>): Promise<any> {
     const url = new URL(path, 'http://local');
-    const [resource, id, action] = url.pathname.split('/').filter(Boolean);
+    const [resource, id] = url.pathname.split('/').filter(Boolean);
     const rows = await all();
     if (resource === 'jobs' && !id && method === 'GET') {
         const jobs = rows.filter(r => r.kind === 'job') as unknown as Job[];
@@ -41,7 +42,7 @@ export async function demoRequest(path: string, method = 'GET', body?: Record<st
         if (existing)
             return existing;
         const now = new Date().toISOString();
-        const job = { ...body, id: body?.import_id ? `job-${body.import_id}` : crypto.randomUUID(), kind: 'job', created_at: now, updated_at: now, applied_at: nextAppliedDate(body?.applied_at as string | null, body?.status as Job['status']) };
+        const job = { ...jobSchema.parse(body), id: body?.import_id ? `job-${body.import_id}` : crypto.randomUUID(), kind: 'job', created_at: now, updated_at: now, applied_at: nextAppliedDate(body?.applied_at as string | null, body?.status as Job['status']) };
         await put(job);
         if (body?.import_id) {
             const item = await get(body.import_id as string);
@@ -57,7 +58,7 @@ export async function demoRequest(path: string, method = 'GET', body?: Record<st
         if (method === 'GET')
             return { ...job, raw_text: rows.find(r => r.id === job.import_id)?.raw_text || '', attachments: rows.filter(r => r.kind === 'attachment' && r.import_id === job.import_id) };
         if (method === 'PATCH') {
-            const merged: Row = { ...job, ...body, id, kind: 'job', updated_at: new Date().toISOString() };
+            const merged: Row = { ...job, ...jobSchema.parse({ ...job, ...body }), id, kind: 'job', updated_at: new Date().toISOString() };
             merged.applied_at = nextAppliedDate(merged.applied_at as string | null, merged.status as Job['status']);
             await put(merged);
             return merged;
@@ -73,7 +74,7 @@ export async function demoRequest(path: string, method = 'GET', body?: Record<st
         }
     }
     if (resource === 'imports' && method === 'POST' && !id) {
-        const record = { ...body, id: crypto.randomUUID(), kind: 'import', state: 'uploaded', extracted: null, error: null, created_at: new Date().toISOString() };
+        const record = { ...importSchema.parse(body), id: crypto.randomUUID(), kind: 'import', state: 'uploaded', extracted: null, error: null, created_at: new Date().toISOString() };
         await put(record);
         return record;
     }
@@ -81,8 +82,6 @@ export async function demoRequest(path: string, method = 'GET', body?: Record<st
         const item = await get(id);
         if (!item)
             throw new Error('导入不存在');
-        if (action === 'extract')
-            throw new Error('截图已保存在本地，自动识别尚未启用，请手动填写。');
         return { ...item, attachments: rows.filter(r => r.kind === 'attachment' && r.import_id === id) };
     }
     throw new Error('未找到记录');

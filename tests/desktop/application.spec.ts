@@ -6,10 +6,10 @@ import path from 'node:path';
 test('安装包界面离线运行，岗位、投递记录和截图在完整重启后保留', async () => {
   const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-test-'));
   let application: ElectronApplication | undefined;
-  const launch = async () => {
+  const launch = async (legacy = false) => {
     application = await electron.launch({
-      ...(process.env.OFFERDESK_TEST_EXECUTABLE ? { executablePath: process.env.OFFERDESK_TEST_EXECUTABLE } : {}),
-      args: [...(process.env.OFFERDESK_TEST_EXECUTABLE ? [] : ['desktop']), `--user-data-dir=${profile}`],
+      ...(!legacy && process.env.OFFERDESK_TEST_EXECUTABLE ? { executablePath: process.env.OFFERDESK_TEST_EXECUTABLE } : {}),
+      args: [...(legacy ? [process.env.OFFERDESK_UPGRADE_FROM!] : process.env.OFFERDESK_TEST_EXECUTABLE ? [] : ['desktop']), `--user-data-dir=${profile}`],
       env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1' },
     });
     const page = await application.firstWindow();
@@ -17,7 +17,7 @@ test('安装包界面离线运行，岗位、投递记录和截图在完整重�
     return page;
   };
   try {
-    let page = await launch();
+    let page = await launch(Boolean(process.env.OFFERDESK_UPGRADE_FROM));
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     expect(page.url()).toBe('offerdesk://app/');
@@ -68,7 +68,20 @@ test('安装包界面离线运行，岗位、投递记录和截图在完整重�
     await expect(page.getByLabel('投递日期')).not.toHaveValue('');
     await page.getByText('原始招聘信息', { exact: false }).click();
     await expect.poll(() => page.getByRole('img', { name: 'local-test.png', exact: true }).evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
-    await page.getByRole('button', { name: '关闭', exact: true }).click();
+    await page.getByRole('button', { name: '删除岗位', exact: true }).click();
+    await page.getByRole('button', { name: '确认删除', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('.jobs-table tbody tr')).toHaveCount(0);
+    expect(await page.evaluate(() => new Promise<number>((resolve, reject) => {
+      const open = indexedDB.open('offerdesk-local-v1', 1);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const rows = db.transaction('records', 'readonly').objectStore('records').getAll();
+        rows.onerror = () => { db.close(); reject(rows.error); };
+        rows.onsuccess = () => { const remaining = rows.result.filter(row => row.kind === 'attachment' || row.kind === 'import').length; db.close(); resolve(remaining); };
+      };
+    }))).toBe(0);
     await page.getByLabel('搜索公司、岗位或技能').fill('');
     await expect(page.locator('.jobs-table tbody tr')).toHaveCount(20);
     await page.screenshot({ path: 'test-results/desktop-home.png', fullPage: true });

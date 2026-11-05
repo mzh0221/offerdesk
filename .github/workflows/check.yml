@@ -1,5 +1,7 @@
 name: Validate OfferDesk
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -8,10 +10,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Install
-        run: npm ci
+          cache: npm
+      - run: npm ci
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
-        env:
-          APP_MODE: demo

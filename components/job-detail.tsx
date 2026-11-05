@@ -1,22 +1,19 @@
-'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MapPin, Pencil, Trash2, Check, LoaderCircle, FileImage, Building2, CalendarDays, GraduationCap, Clock3 } from 'lucide-react';
 import Dialog from './dialog';
 import JobForm, { cleanFields } from './job-form';
 import AttachmentImage from './attachment-image';
 import RecruitmentLink from './recruitment-link';
-import { clientApi } from '@/lib/client';
+import { localClient as api } from '@/lib/local-client';
 import { STATUSES, safeSourceUrl, type Job, type Attachment } from '@/lib/domain';
 export function StatusBadge({ status }: {
     status: string;
 }) { return <span className={`status-badge status-${STATUSES.indexOf(status as Job['status'])}`}><i />{status}</span>; }
-export default function JobDetail({ id, demo, onClose, onChanged }: {
+export default function JobDetail({ id, onClose, onChanged }: {
     id: string;
-    demo: boolean;
     onClose: () => void;
     onChanged: () => void;
 }) {
-    const api = useMemo(() => clientApi(demo), [demo]);
     const [job, setJob] = useState<Job | null>(null);
     const [files, setFiles] = useState<Attachment[]>([]);
     const [raw, setRaw] = useState('');
@@ -81,7 +78,7 @@ export default function JobDetail({ id, demo, onClose, onChanged }: {
                                 {([['required', '必备技能'], ['preferred', '加分项'], ['availability', '到岗条件']] as const).map(([key, title]) => <div className="requirement-list" key={key}><h4>{title}</h4>{job[key].length ? <ul>{job[key].map((item, i) => <li key={i}>{item}</li>)}</ul> : <p className="muted">原文未说明</p>}</div>)}
                             </>}
                         </section>
-                        {(!!files.length || raw) && <details className="source-details"><summary><FileImage size={16}/>原始招聘信息{files.length > 0 ? ` · ${files.length} 张截图` : ''}</summary>{raw && <pre>{raw}</pre>}<div className="image-grid">{files.map(file => <AttachmentImage key={file.id} item={file} demo={demo}/>)}</div></details>}
+                        {(!!files.length || raw) && <details className="source-details"><summary><FileImage size={16}/>原始招聘信息{files.length > 0 ? ` · ${files.length} 张截图` : ''}</summary>{raw && <pre>{raw}</pre>}<div className="image-grid">{files.map(file => <AttachmentImage key={file.id} item={file}/>)}</div></details>}
                     </div>
                     <aside className="detail-sidebar" aria-label="投递记录">
                         <section className="detail-section"><h3>投递记录</h3><div className="form-grid"><label>当前状态<select value={job.status} onChange={e => { setSaved(false); setJob({ ...job, status: e.target.value as Job['status'] }); }}>{STATUSES.map(status => <option key={status}>{status}</option>)}</select></label><label>投递日期<input type="date" value={job.applied_at || ''} onChange={e => { setSaved(false); setJob({ ...job, applied_at: e.target.value || null }); }}/></label></div>

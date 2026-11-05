@@ -1,24 +1,18 @@
-'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BriefcaseBusiness, ArrowUpRight, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, ArrowRight, CircleHelp, LogOut, LoaderCircle, X, Check, RotateCcw, Clipboard } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BriefcaseBusiness, ArrowUpRight, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, ArrowRight, CircleHelp, LoaderCircle, X, Check, RotateCcw, Clipboard } from 'lucide-react';
 import AddJob from './add-job';
 import JobDetail from './job-detail';
 import RecruitmentLink from './recruitment-link';
 import Dialog from './dialog';
-import { clientApi } from '@/lib/client';
-import { seedDemo } from '@/lib/demo';
-import { browserClient } from '@/lib/supabase/browser';
+import { localClient as api } from '@/lib/local-client';
+import { initializeLocalStore } from '@/lib/local-store';
 import { STATUSES, splitCities, type Job } from '@/lib/domain';
 type Facet = {
     city: string | null;
     job_type: string | null;
     status: string;
 };
-export default function Dashboard({ demo, email }: {
-    demo: boolean;
-    email: string;
-}) {
-    const api = useMemo(() => clientApi(demo), [demo]);
+export default function Dashboard() {
     const [jobs, setJobs] = useState<Job[]>([]);
     const [facets, setFacets] = useState<Facet[]>([]);
     const [total, setTotal] = useState(0);
@@ -40,10 +34,10 @@ export default function Dashboard({ demo, email }: {
     const [entryMode, setEntryMode] = useState<'images' | 'text'>('images');
     const [toast, setToast] = useState('');
     const sequence = useRef(0);
-    const [ready, setReady] = useState(!demo);
-    useEffect(() => { let active = true; if (demo)
-        seedDemo().then(() => { if (active)
-            setReady(true); }).catch(e => { setError(e.message); setLoading(false); }); setPending(sessionStorage.getItem('offerdesk-pending-import')); return () => { active = false; }; }, [demo]);
+    const [ready, setReady] = useState(false);
+    useEffect(() => { let active = true;
+        initializeLocalStore().then(() => { if (active)
+            setReady(true); }).catch(e => { setError(e.message); setLoading(false); }); setPending(sessionStorage.getItem('offerdesk-pending-import')); return () => { active = false; }; }, []);
     useEffect(() => { const timer = setTimeout(() => { setSearch(query); setPage(1); }, 250); return () => clearTimeout(timer); }, [query]);
     useEffect(() => { setPage(1); }, [city, status, type]);
     useEffect(() => { if (!ready)
@@ -88,8 +82,7 @@ export default function Dashboard({ demo, email }: {
                 <span className="header-divider"/><span className="workspace-name">岗位投递台</span>
                 <div className="header-tools">
                     <button className="help-button" onClick={() => setHelp(true)}><CircleHelp size={16}/><span>使用说明</span></button>
-                    <span className="account-label">{demo ? '本地工作台' : email.split('@')[0]}</span>
-                    {!demo && <button className="icon-button" aria-label="退出登录" onClick={async () => { await browserClient().auth.signOut(); location.assign('/login'); }}><LogOut size={16}/></button>}
+                    <span className="account-label">本地工作台</span>
                 </div>
             </header>
             <div className="page-content">
@@ -97,7 +90,7 @@ export default function Dashboard({ demo, email }: {
                     <div><h1>岗位与投递</h1><p>截图收集岗位，直接跟进投递。</p></div>
                     <div className="entry-actions"><button className="secondary" onClick={() => openAdd('text')}><Clipboard size={15}/>文字录入</button><button className="primary screenshot-action" onClick={() => openAdd()}><ImagePlus size={18}/>上传岗位截图</button></div>
                 </section>
-                {demo && <div className="demo-inline"><span className="demo-label">本地</span><span>已整理长三角公开实习岗位，详情附招聘原链接。截图自动识别尚未启用。</span><button className="text-button" onClick={() => setHelp(true)}>说明</button></div>}
+                <div className="local-inline"><span className="local-label">本地</span><span>已整理长三角公开实习岗位，详情附招聘原链接。截图自动识别尚未启用。</span><button className="text-button" onClick={() => setHelp(true)}>说明</button></div>
                 <section className="jobs-section" aria-label="岗位列表">
                     <div className="list-navigation"><nav className="status-tabs" aria-label="按投递状态筛选">
                         <button aria-pressed={!status} className={!status ? 'selected' : ''} onClick={() => setStatus('')}>全部岗位<span>{facets.length}</span></button>
@@ -130,6 +123,6 @@ export default function Dashboard({ demo, email }: {
                 </section>
             </div>
         </main>
-    {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}{add && <AddJob initialInput={entryMode} demo={demo} resume={resume} onClose={closeAdd} onSaved={() => { closeAdd(); setPending(null); reload(); setToast('新岗位已收进工作台'); }}/>}{detail && <JobDetail id={detail} demo={demo} onClose={() => setDetail(null)} onChanged={reload}/>}{help && <Dialog title="使用你的岗位投递台" onClose={() => setHelp(false)}><div className="dialog-content guide"><span className="mini-icon"><BriefcaseBusiness size={24}/></span><h3>三步，把岗位整理清楚。</h3><ol><li><strong>收集</strong><p>上传同一岗位的1—5张截图，或粘贴招聘文字。截图可以拖拽、粘贴、排序。</p></li><li><strong>核对</strong><p>识别后检查公司、岗位及要求，修正模糊信息，再保存。没有写明的条件会留空。</p></li><li><strong>跟进</strong><p>打开岗位详情，修改状态、日期和备注；招聘原文和截图随时可以回看。</p></li></ol>{demo && <div className="notice">当前为本地模式，初始岗位来自企业公开招聘信息，详情可查看来源和核查日期；是否仍接收申请以招聘方为准。岗位与截图仅保存在当前设备，不会同步到其他设备；截图自动识别尚未启用。</div>}<button className="primary full" onClick={() => setHelp(false)}>开始整理<ArrowRight size={15}/></button></div></Dialog>}
+    {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}{add && <AddJob initialInput={entryMode} resume={resume} onClose={closeAdd} onSaved={() => { closeAdd(); setPending(null); reload(); setToast('新岗位已收进工作台'); }}/>}{detail && <JobDetail id={detail} onClose={() => setDetail(null)} onChanged={reload}/>}{help && <Dialog title="使用你的岗位投递台" onClose={() => setHelp(false)}><div className="dialog-content guide"><span className="mini-icon"><BriefcaseBusiness size={24}/></span><h3>三步，把岗位整理清楚。</h3><ol><li><strong>收集</strong><p>上传同一岗位的1—5张截图，或粘贴招聘文字。截图可以拖拽、粘贴、排序。</p></li><li><strong>核对</strong><p>对照截图或招聘原文填写公司、岗位和要求，没有写明的条件可以留空。</p></li><li><strong>跟进</strong><p>打开岗位详情，修改状态、日期和备注；招聘原文和截图随时可以回看。</p></li></ol><div className="notice">当前为本地模式，初始岗位来自企业公开招聘信息，详情可查看来源和核查日期；是否仍接收申请以招聘方为准。岗位与截图仅保存在当前设备，不会同步到其他设备；截图自动识别尚未启用。</div><button className="primary full" onClick={() => setHelp(false)}>开始整理<ArrowRight size={15}/></button></div></Dialog>}
   </div>;
 }

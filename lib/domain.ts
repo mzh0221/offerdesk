@@ -17,7 +17,6 @@ export type Fields = {
 };
 export type Job = Fields & {
     id: string;
-    user_id?: string;
     import_id: string | null;
     source_url: string | null;
     status: Status;
@@ -28,19 +27,6 @@ export type Job = Fields & {
     is_sample?: boolean;
     is_reference?: boolean;
     source_checked_at?: string;
-};
-export type Extraction = Fields & {
-    raw_text: string;
-    warnings: string[];
-};
-export type ImportRecord = {
-    id: string;
-    input_type: 'images' | 'text';
-    raw_text: string;
-    state: 'uploaded' | 'processing' | 'ready' | 'failed' | 'saved';
-    extracted: Extraction | null;
-    error: string | null;
-    created_at: string;
 };
 export type Attachment = {
     id: string;

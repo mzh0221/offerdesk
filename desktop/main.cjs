@@ -77,7 +77,7 @@ function menu() {
     { label: '视图', submenu: [{ role: 'reload' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
     { label: '帮助', submenu: [
       { label: 'GitHub 项目', click: () => { void openExternal('https://github.com/mzh0221/offerdesk'); } },
-      { label: '关于数据保存', click: () => { void dialog.showMessageBox({ type: 'info', title: '本地数据', message: '岗位和截图保存在当前应用的数据目录中。', detail: '关闭或升级应用不会主动删除记录。网页浏览器中的旧记录与桌面版互相独立，目前尚无导入/导出备份功能。请勿删除应用数据目录。' }); } },
+      { label: '关于数据保存', click: () => { void dialog.showMessageBox({ type: 'info', title: '本地数据', message: '岗位和截图保存在当前应用的数据目录中。', detail: '关闭应用后记录会保留。可通过“文件 → 打开数据目录”查看保存位置。' }); } },
     ] },
   ]));
 }

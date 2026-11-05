@@ -1,4 +1,3 @@
-'use client';
 import type { Fields } from '@/lib/domain';
 const textFields: [
     keyof Fields,

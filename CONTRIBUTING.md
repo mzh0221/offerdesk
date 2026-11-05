@@ -1,23 +1,20 @@
 # 参与 OfferDesk
 
-本项目是单人使用的本地桌面应用，需求范围见 [docs/requirements.md](docs/requirements.md)。修改前请阅读仓库中的 `AGENTS.md` 及对应模块说明。
-
-## 开发与检查
+项目是 Electron + React + Vite 本地桌面应用，当前范围见 [需求说明](docs/requirements.md)。
 
 ```sh
 npm ci
-npm run desktop:start
+npm start
 npm test
 npm run typecheck
+npm run build
 npm run desktop:test
 ```
 
-桌面入口在 `desktop/`，共享界面在 `components/`，本地数据逻辑在 `lib/demo.ts`。网页开发可使用 `npm run dev -- --hostname 127.0.0.1`；安装包构建见 [docs/desktop.md](docs/desktop.md)。
+桌面入口、样式和图标在 `desktop/`，界面在 `components/`，本地存储在 `lib/local-store.ts`，图片校验和本地调用在 `lib/local-client.ts`。打包见 [桌面构建说明](docs/desktop.md)。
 
-涉及数据格式的改动应保留旧记录、用户修改及截图，并补充恢复测试。不要更改应用名、应用 ID 或内部来源，除非同时提供明确的数据迁移方案。核心功能必须能在未配置云服务时使用。
+保持应用名、应用 ID、内部来源、数据库名和对象仓库稳定。涉及存储格式时，应验证旧记录、投递状态、备注和截图仍可读取；不通过更改存储标识隐藏兼容问题。
 
-提交 PR 时说明用户可见变化与实际完成的验证。只改文档时检查链接与差异即可；不要把未运行的跨平台测试写成通过。
+当前不扩展云服务、网页账户、备份恢复或签名流程。PR 说明实际用户可见变化与已完成检查，未运行的平台验证不能写成通过。
 
-请勿提交 `.env.local`、访问令牌、证书、个人岗位数据、依赖目录或安装包。反馈问题时使用虚构样例，截图应去除个人信息。
-
-源码按根目录 [MIT 许可证](LICENSE) 分发；第三方组件沿用各自许可，初始公开岗位的来源见 [docs/reference-jobs.md](docs/reference-jobs.md)。
+不提交个人岗位、截图、密钥、依赖或安装包。源码采用 [MIT 许可证](LICENSE)，第三方组件保留原许可，初始岗位来源见 [岗位资料](docs/reference-jobs.md)。
