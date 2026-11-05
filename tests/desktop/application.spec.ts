@@ -25,7 +25,7 @@ test('安装包界面离线运行，岗位、投递记录和截图在完整重�
     expect(await page.evaluate(() => typeof (globalThis as Record<string, unknown>).require)).toBe('undefined');
     expect(await page.evaluate(async () => { try { await fetch('https://example.com'); return false; } catch { return true; } })).toBe(true);
 
-    await page.getByRole('button', { name: '上传岗位截图', exact: true }).click();
+    await page.locator('button.screenshot-action').click();
     await page.locator('input[type="file"]').setInputFiles({
       name: 'local-test.png',
       mimeType: 'image/png',
