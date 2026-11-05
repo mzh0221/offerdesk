@@ -22,6 +22,8 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
     const [step, setStep] = useState<'input' | 'review'>('input');
     const [fields, setFields] = useState<Fields>({ ...EMPTY_FIELDS });
     const [ocrResults, setOcrResults] = useState<Record<string, string>>({});
+    const [textEdited, setTextEdited] = useState(false);
+    const [additionalText, setAdditionalText] = useState('');
     const [progress, setProgress] = useState('');
     const [recognized, setRecognized] = useState(false);
     const [ocrErrors, setOcrErrors] = useState<string[]>([]);
@@ -34,31 +36,51 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
     const [attachments, setAttachments] = useState<Attachment[]>([]);
     useEffect(() => { if (!resume)
         return; let active = true; setBusy(true); api.request(`imports/${resume}`).then(item => { if (!active)
-        return; setTab(item.input_type); setAttachments(item.attachments || []); setText(item.raw_text || ''); setRecognized(Boolean(item.raw_text)); if (item.extracted) {
+        return; setTab(item.input_type); setAttachments(item.attachments || []); setText(item.raw_text || ''); setRecognized(Boolean(item.raw_text)); setTextEdited(Boolean(item.raw_text)); if (item.extracted) {
         setFields(item.extracted);
         setStep('review');
     } if (item.state === 'saved')
         setError('该导入已保存，重复保存将返回原岗位。'); }).catch(e => setError(e.message)).finally(() => setBusy(false)); return () => { active = false; }; }, [resume, api]);
-    function addFiles(incoming: File[]) { if (busy)
-        return; setError(''); const combined = [...files, ...incoming]; if (combined.length > 5) {
-        setError('一个岗位最多上传5张截图');
-        return;
-    } for (const file of incoming) {
-        const issue = validateImage(file.type, file.size);
-        if (issue) {
-            setError(issue);
-            return;
+    function draftFields() { return { ...cleanFields(fields), company: fields.company || '', title: fields.title || '' }; }
+    async function replaceFiles(next: File[]) {
+        if (busy) return;
+        setBusy(true); setError('');
+        try {
+            if (importId) await api.draft(importId, { input_type: 'images', raw_text: '', extracted: draftFields() }, next);
+            setFiles(next); setAttachments([]); setOcrResults({}); setRecognized(false);
+            setText(''); setTextEdited(false); setAdditionalText(''); setOcrErrors([]);
+        } catch (e) { setError(e instanceof Error ? e.message : '更新截图失败'); }
+        finally { setBusy(false); }
+    }
+    async function changeTab(next: 'images' | 'text') {
+        if (busy || tab === next) return;
+        setBusy(true); setError('');
+        try {
+            if (importId) await api.draft(importId, { input_type: next, raw_text: text, extracted: draftFields() }, next === 'text' ? [] : files);
+            setTab(next); setOcrResults({}); setRecognized(false); setAdditionalText(''); setAttachments([]);
+        } catch (e) { setError(e instanceof Error ? e.message : '切换录入方式失败'); }
+        finally { setBusy(false); }
+    }
+    function addFiles(incoming: File[]) {
+        if (busy || !incoming.length) return;
+        const combined = [...files, ...incoming];
+        if (combined.length > 5) { setError('一个岗位最多上传5张截图'); return; }
+        for (const file of incoming) {
+            const issue = validateImage(file.type, file.size);
+            if (issue) { setError(issue); return; }
         }
-    } setOcrResults({}); setRecognized(false); setText(''); setOcrErrors([]); setFiles(combined); setImportId(null); setAttachments([]); }
-    function swap(index: number, offset: number) { const next = [...files]; [next[index], next[index + offset]] = [next[index + offset], next[index]]; setFiles(next); setImportId(null); setOcrResults({}); setRecognized(false); setText(''); }
-    async function ensureImport() { if (importId)
-        return importId; if (tab === 'images' && !files.length)
-        return null; if (tab === 'text' && !text.trim())
-        return null; const item = await api.request('imports', 'POST', { input_type: tab, raw_text: text }); if (files.length && tab === 'images')
-        await api.upload(item.id, files); setImportId(item.id); sessionStorage.setItem('offerdesk-pending-import', item.id); return item.id as string; }
+        void replaceFiles(combined);
+    }
+    function swap(index: number, offset: number) {
+        const next = [...files]; [next[index], next[index + offset]] = [next[index + offset], next[index]];
+        void replaceFiles(next);
+    }
     async function persistDraft(nextFields: Fields) {
-        const id = await ensureImport();
-        if (id) await api.request(`imports/${id}`, 'PATCH', { raw_text: text, extracted: { ...cleanFields(nextFields), company: nextFields.company || '', title: nextFields.title || '' } });
+        if (!importId && !files.length && !text.trim() && !attachments.length) return null;
+        const item = await api.draft(importId, { input_type: tab, raw_text: text, extracted: { ...cleanFields(nextFields), company: nextFields.company || '', title: nextFields.title || '' } }, tab === 'text' ? [] : files.length || !attachments.length ? files : undefined);
+        setImportId(item.id);
+        sessionStorage.setItem('offerdesk-pending-import', item.id);
+        return item.id as string;
     }
     async function prefill() {
         if (Object.values(fields).some(value => Array.isArray(value) ? value.length : value) && !window.confirm('根据文字重新预填会替换当前表单内容，是否继续？')) return;
@@ -68,9 +90,12 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
         finally { setBusy(false); }
     }
     async function recognize() {
+        const total = files.length || attachments.length;
+        const retry = Object.keys(ocrResults).length > 0 && Object.keys(ocrResults).length < total;
+        if (!retry && textEdited && !window.confirm('重新识别会替换已修改的原文，是否继续？')) return;
+        const previousKeys = new Set(Object.keys(ocrResults));
         const abort = new AbortController(); controller.current = abort;
         setBusy(true); setError(''); setOcrErrors([]);
-        const total = files.length || attachments.length;
         const results = Object.keys(ocrResults).length === total ? {} as Record<string, string> : { ...ocrResults };
         const issues: string[] = [];
         const images = files.length ? files.map((file, i) => ({ key: `${i}:${file.name}`, name: file.name, blob: async () => file as Blob })) : attachments.map(a => ({ key: a.id, name: a.name, blob: async () => { const url = await api.image(a.id); try { return await (await fetch(url)).blob(); } finally { URL.revokeObjectURL(url); } } }));
@@ -89,7 +114,13 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
                     issues.push(`${image.name}：${e instanceof Error ? e.message : '识别失败'}`);
                 }
             }
-            setText(images.map(image => results[image.key] || '').filter(Boolean).join('\n\n').slice(0, 30000));
+            if (retry && textEdited) {
+                const newlyRecognized = images.filter(image => !previousKeys.has(image.key)).map(image => results[image.key] || '').filter(Boolean).join('\n\n');
+                if (newlyRecognized) setAdditionalText(value => [value, newlyRecognized].filter(Boolean).join('\n\n').slice(0, 30000));
+            } else {
+                setText(images.map(image => results[image.key] || '').filter(Boolean).join('\n\n').slice(0, 30000));
+                setTextEdited(false); setAdditionalText('');
+            }
             setRecognized(true); setOcrErrors(issues);
             if (abort.signal.aborted) setError('识别已取消，已完成的文字仍可使用');
             else if (!Object.values(results).some(value => value.trim())) setError('未识别到文字，可更换清晰截图或手动填写');
@@ -113,8 +144,8 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
         const duplicates = await api.request(`jobs?q=${encodeURIComponent(fields.company)}`);
         if (duplicates.items.some((j: Fields) => j.company === fields.company.trim() && j.title === fields.title.trim()) && !window.confirm('已存在同公司、同名称的岗位，仍要保存吗？'))
             return;
-        await persistDraft(fields);
-        await api.request('jobs', 'POST', { ...cleanFields(fields), company: fields.company.trim(), title: fields.title.trim(), import_id: importId, source_url: safeSourceUrl(source), status: '待投递', applied_at: null, notes: '' });
+        const savedImportId = await persistDraft(fields);
+        await api.request('jobs', 'POST', { ...cleanFields(fields), company: fields.company.trim(), title: fields.title.trim(), import_id: savedImportId, source_url: safeSourceUrl(source), status: '待投递', applied_at: null, notes: '' });
         sessionStorage.removeItem('offerdesk-pending-import');
         onSaved();
     }
@@ -132,10 +163,11 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
     } }}>
     <div className="stepper"><span className="active"><i>{step === 'review' ? <Check size={12}/> : 1}</i>添加招聘信息</span><b /><span className={step === 'review' ? 'active' : ''}><i>2</i>核对并保存</span></div>
     {error && <div className="notice error" role="alert">{error}</div>}
-    {step === 'input' ? <><div className="segmented"><button className={tab === 'images' ? 'selected' : ''} disabled={busy || !!resume} onClick={() => { setTab('images'); setImportId(null); }}><ImagePlus size={16}/>上传截图</button><button className={tab === 'text' ? 'selected' : ''} disabled={busy || !!resume} onClick={() => { setTab('text'); setImportId(null); }}><Clipboard size={16}/>粘贴文字</button></div>
+    {step === 'input' ? <><div className="segmented"><button className={tab === 'images' ? 'selected' : ''} disabled={busy || !!resume} onClick={() => void changeTab('images')}><ImagePlus size={16}/>上传截图</button><button className={tab === 'text' ? 'selected' : ''} disabled={busy || !!resume} onClick={() => void changeTab('text')}><Clipboard size={16}/>粘贴文字</button></div>
       {tab === 'images' ? <><label className={`upload-zone ${busy ? 'disabled' : ''}`} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!attachments.length)
-            addFiles(Array.from(e.dataTransfer.files)); }}><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy || !!attachments.length} onChange={e => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }}/><span className="upload-icon"><ImagePlus size={30}/></span><strong>把岗位截图放在这里</strong><span>点击选择、拖拽图片，或直接 Ctrl / ⌘ + V 粘贴</span><small>同一岗位最多 5 张 · JPG / PNG / WebP · 每张 ≤ 5MB</small></label><div className="image-grid">{files.map((f, i) => <div className="upload-preview" key={`${f.name}-${i}`}><Preview file={f}/><div><span>{i + 1}. {f.name}</span><button disabled={busy || i === 0} className="icon-button" aria-label="前移截图" onClick={() => swap(i, -1)}><ArrowUp size={13}/></button><button disabled={busy || i === files.length - 1} className="icon-button" aria-label="后移截图" onClick={() => swap(i, 1)}><ArrowDown size={13}/></button><button disabled={busy} className="icon-button" aria-label="移除截图" onClick={() => { setFiles(files.filter((_, idx) => idx !== i)); setImportId(null); setOcrResults({}); setRecognized(false); setText(''); }}><X size={14}/></button></div></div>)}{attachments.map(a => <AttachmentImage key={a.id} item={a}/>)}</div><div className="hint"><FileText size={16}/><p>上传同一岗位的介绍和要求，在本机离线识别。<br /><span>一次录入一个岗位，截图与岗位信息一起保存在本地。</span></p></div></> : <label className="text-import">招聘原文<textarea rows={12} maxLength={30000} value={text} disabled={busy} onChange={e => setText(e.target.value)} placeholder="把公司、岗位介绍、任职要求粘贴到这里…"/></label>}
-      {tab === 'images' && recognized && <label className="text-import">识别原文（可修改）<textarea rows={10} maxLength={30000} value={text} disabled={busy} onChange={e => setText(e.target.value)} /></label>}
+            addFiles(Array.from(e.dataTransfer.files)); }}><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy || !!attachments.length} onChange={e => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }}/><span className="upload-icon"><ImagePlus size={30}/></span><strong>把岗位截图放在这里</strong><span>点击选择、拖拽图片，或直接 Ctrl / ⌘ + V 粘贴</span><small>同一岗位最多 5 张 · JPG / PNG / WebP · 每张 ≤ 5MB</small></label><div className="image-grid">{files.map((f, i) => <div className="upload-preview" key={`${f.name}-${i}`}><Preview file={f}/><div><span>{i + 1}. {f.name}</span><button disabled={busy || i === 0} className="icon-button" aria-label="前移截图" onClick={() => swap(i, -1)}><ArrowUp size={13}/></button><button disabled={busy || i === files.length - 1} className="icon-button" aria-label="后移截图" onClick={() => swap(i, 1)}><ArrowDown size={13}/></button><button disabled={busy} className="icon-button" aria-label="移除截图" onClick={() => void replaceFiles(files.filter((_, idx) => idx !== i))}><X size={14}/></button></div></div>)}{attachments.map(a => <AttachmentImage key={a.id} item={a}/>)}</div><div className="hint"><FileText size={16}/><p>上传同一岗位的介绍和要求，在本机离线识别。<br /><span>一次录入一个岗位，截图与岗位信息一起保存在本地。</span></p></div></> : <label className="text-import">招聘原文<textarea rows={12} maxLength={30000} value={text} disabled={busy} onChange={e => { setText(e.target.value); setTextEdited(true); }} placeholder="把公司、岗位介绍、任职要求粘贴到这里…"/></label>}
+      {tab === 'images' && recognized && <label className="text-import">识别原文（可修改）<textarea rows={10} maxLength={30000} value={text} disabled={busy} onChange={e => { setText(e.target.value); setTextEdited(true); }} /></label>}
+      {additionalText && <label className="text-import">重试新增文字（请复制需要的内容到识别原文）<textarea rows={5} value={additionalText} readOnly /></label>}
       {ocrErrors.length > 0 && <div className="notice error" role="alert">{ocrErrors.map(issue => <p key={issue}>{issue}</p>)}</div>}
       {progress && <p role="status">{progress}</p>}
       <div className="dialog-actions">

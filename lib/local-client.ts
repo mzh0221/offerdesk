@@ -1,8 +1,9 @@
-import { localRequest, saveScreenshots, getScreenshotUrl } from './local-store';
+import { localRequest, getScreenshotUrl, saveImportDraft } from './local-store';
 import { looksLikeImage, validateImage } from './domain';
 import { uploadsSchema } from './schema';
 
-async function upload(importId: string, files: File[]) {
+async function validateScreenshots(files: File[]) {
+    if (!files.length) return;
     uploadsSchema.parse({ files: files.map(file => ({ name: file.name, mime: file.type, size: file.size })) });
     for (const file of files) {
         const issue = validateImage(file.type, file.size);
@@ -16,7 +17,10 @@ async function upload(importId: string, files: File[]) {
         bitmap.close();
         if (pixels > 40000000) throw new Error('截图尺寸过大，请将长图拆成几张上传');
     }
-    return saveScreenshots(importId, files);
 }
 
-export const localClient = { request: localRequest, upload, image: getScreenshotUrl };
+async function draft(id: string | null, body: Record<string, unknown>, files?: File[]) {
+    if (files !== undefined) await validateScreenshots(files);
+    return saveImportDraft(id, body, files);
+}
+export const localClient = { request: localRequest, draft, image: getScreenshotUrl };
