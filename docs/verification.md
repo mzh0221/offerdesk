@@ -73,8 +73,8 @@ Supabase 数据库迁移、RLS 回归、邀请邮件、云模型链路和云端�
 - [x] Mac 上实际 Electron 源码入口通过离线界面、截图上传、岗位保存、投递状态、日期、备注、截图原图和退出重启恢复测试，使用独立临时数据目录。
 - [x] Mac arm64 的 DMG / ZIP 已生成；ASAR 仅含桌面主进程和静态页面，不含环境配置、服务端依赖、Git 或个人数据。
 - [x] 最终 Mac arm64 打包后应用通过同一组测试：离线页面、截图上传/原图、投递状态/日期/备注，以及完全退出重启后的恢复。
-- [ ] GitHub 源码推送与公开预览 Release 发布。
-- [ ] Mac Intel 与 Windows x64 原生构建，以及打包后应用的同组测试。
+- [x] GitHub 源码已推送，公开发布 [v1.0.0 预览版](https://github.com/mzh0221/offerdesk/releases/tag/v1.0.0)，含 DMG、ZIP、EXE 与 SHA-256 校验和。
+- [x] Mac Intel、Apple Silicon 与 Windows x64 的原生构建、源码入口及打包后应用测试均通过，见 [三平台构建记录](https://github.com/mzh0221/offerdesk/actions/runs/41957562246)。
 - [ ] Mac 签名/公证和 Windows 签名方案。
 - [ ] 覆盖升级、Windows 安装/卸载、网页旧数据迁移和完整备份恢复验收。
 

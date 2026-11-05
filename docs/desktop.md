@@ -64,7 +64,7 @@ npm run desktop:dist -- --win --x64
 2. 构建对应安装包，然后启动打包后的应用再次验证。
 3. 将 DMG/ZIP/EXE 上传到 Actions artifacts。标签构建全部通过后，发布附校验和、明确标记为预览版的 Release。任一平台构建或测试失败时不发布。
 
-仓库和首个 Release 尚未发布前，不能把配置完成当作已经提供下载；Windows 和 Intel Mac 也需要对应系统的构建与运行结果。
+2026-11-05：[v1.0.0 预览版](https://github.com/mzh0221/offerdesk/releases/tag/v1.0.0) 已公开发布。Mac arm64、Mac x64 和 Windows x64 三个平台均完成原生构建，并通过源码入口及打包后应用的截图保存、原图查看、投递记录和完全退出重启恢复测试；[构建结果](https://github.com/mzh0221/offerdesk/actions/runs/41957562246) 全部成功。Windows 安装向导、卸载及覆盖升级的人工验收尚未完成。
 
 ## 签名与预览状态
 

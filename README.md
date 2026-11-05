@@ -2,14 +2,20 @@
 
 以截图和文字为入口的个人求职工作台，用于收集岗位、核对要求和记录投递。**当前目标是 GitHub 开源的 Mac / Windows 本地桌面应用**：下载安装后直接打开，岗位和截图留在本机，不要求注册或云服务。
 
-目标仓库：[mzh0221/offerdesk](https://github.com/mzh0221/offerdesk)。首个公开安装包的发布状态以 [Releases](https://github.com/mzh0221/offerdesk/releases) 为准；构建配置完成不代表所有平台已经验证。
+源码仓库：[mzh0221/offerdesk](https://github.com/mzh0221/offerdesk)。[v1.0.0 桌面预览版已发布](https://github.com/mzh0221/offerdesk/releases/tag/v1.0.0)，Mac arm64、Mac x64 和 Windows x64 均已在对应系统完成构建与打包后应用的重启恢复测试。
 
 ## 桌面版
 
-- Mac：Apple Silicon（arm64）和 Intel（x64），计划提供 DMG / ZIP。
-- Windows：x64，计划提供 EXE 安装器。
+| 系统 | 下载 |
+|---|---|
+| Mac Apple Silicon（M 系列） | [DMG 安装包](https://github.com/mzh0221/offerdesk/releases/download/v1.0.0/OfferDesk-1.0.0-mac-arm64.dmg) |
+| Mac Intel | [DMG 安装包](https://github.com/mzh0221/offerdesk/releases/download/v1.0.0/OfferDesk-1.0.0-mac-x64.dmg) |
+| Windows x64 | [EXE 安装包](https://github.com/mzh0221/offerdesk/releases/download/v1.0.0/OfferDesk-1.0.0-win-x64.exe) |
+
+Mac 另有 ZIP 版本，所有文件及 [SHA-256 校验和](https://github.com/mzh0221/offerdesk/releases/download/v1.0.0/SHA256SUMS.txt) 见 Release 页面。
+
 - 安装包自带运行环境，用户不需要 Node.js、终端或单独启动网页服务。
-- 当前截图自动识别、完整备份恢复和旧网页数据迁移尚未实现；发行签名未配置。
+- 当前为预览版，尚未完成 Mac 签名/公证和 Windows 发行签名，系统可能提示开发者无法验证或阻止运行。截图自动识别、完整备份恢复和旧网页数据迁移尚未实现。
 
 从源码打开桌面版：
 
