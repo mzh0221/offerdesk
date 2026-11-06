@@ -91,14 +91,17 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" installers/* --clobber
-          else
-            gh release create "$RELEASE_TAG" installers/* --draft --title "OfferDesk $RELEASE_TAG"
+          gh api "repos/$GH_REPO/releases" --paginate --slurp > releases.json
+          RELEASE_ID="$(jq -r --arg tag "$RELEASE_TAG" '[.[][] | select(.tag_name == $tag)][0].id // empty' releases.json)"
+          if [ -z "$RELEASE_ID" ]; then
+            RELEASE_ID="$(gh api --method POST "repos/$GH_REPO/releases" -f tag_name="$RELEASE_TAG" -f name="OfferDesk $RELEASE_TAG" -F draft=true --jq .id)"
           fi
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > uploaded-release.json
+          gh release upload "$RELEASE_TAG" installers/* --clobber
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" > uploaded-release.json
           while read -r expected filename; do
             actual="$(jq -r --arg name "$filename" '.assets[] | select(.name == $name) | .digest' uploaded-release.json)"
             test "$actual" = "sha256:$expected"
           done < installers/SHA256SUMS.txt
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --title "OfferDesk $RELEASE_TAG" --notes-file docs/release-notes.md
+          jq -n --arg name "OfferDesk $RELEASE_TAG" --rawfile notes docs/release-notes.md '{name: $name, body: $notes, draft: false, prerelease: false, make_latest: "true"}' > release-metadata.json
+          gh api --method PATCH "repos/$GH_REPO/releases/$RELEASE_ID" --input release-metadata.json > published-release.json
+          jq -e '.draft == false and .prerelease == false' published-release.json
