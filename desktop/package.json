@@ -1,7 +1,7 @@
 {
   "name": "offerdesk-desktop",
   "productName": "OfferDesk",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "本地保存岗位、截图与投递进度的个人工作台",
   "main": "main.cjs",
   "author": "mzh0221",

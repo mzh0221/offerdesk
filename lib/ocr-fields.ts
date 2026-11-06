@@ -1,50 +1,175 @@
 import { EMPTY_FIELDS, type Fields } from './domain.ts';
 
-// Require explicit labels: recruitment headings without labels remain for manual review.
+type Scalar = Exclude<keyof Fields, 'required' | 'preferred' | 'availability' | 'tags'>;
+type Section = 'required' | 'preferred' | 'availability' | 'tags';
+const LABELS: Record<string, Scalar> = {
+  公司: 'company', 公司名称: 'company', 企业名称: 'company', 招聘公司: 'company', 所属公司: 'company', 用人单位: 'company',
+  岗位: 'title', 岗位名称: 'title', 职位: 'title', 职位名称: 'title', 招聘岗位: 'title', 招聘职位: 'title',
+  城市: 'city', 工作城市: 'city', 工作地点: 'city', 工作地址: 'city', 办公地点: 'city',
+  薪资: 'salary', 薪酬: 'salary', 薪资待遇: 'salary', 薪资范围: 'salary', 工资待遇: 'salary', 日薪: 'salary', 月薪: 'salary',
+  学历: 'education', 学历要求: 'education', 最低学历: 'education',
+  毕业年份: 'graduation_year', 毕业时间: 'graduation_year', 毕业届别: 'graduation_year', 面向届别: 'graduation_year',
+  实习时长: 'internship_duration', 实习时间: 'internship_duration', 实习周期: 'internship_duration', 实习期限: 'internship_duration',
+  每周天数: 'days_per_week', 每周出勤: 'days_per_week', 每周到岗: 'days_per_week', 每周工作天数: 'days_per_week',
+  岗位类型: 'job_type', 职位类型: 'job_type', 招聘类型: 'job_type',
+};
+const SECTIONS: Record<string, Section> = {
+  任职要求: 'required', 岗位要求: 'required', 任职资格: 'required', 职位要求: 'required', 招聘要求: 'required', 必备技能: 'required', 技能要求: 'required', 技术栈: 'required', 工作要求: 'required', 岗位需求: 'required',
+  加分项: 'preferred', 优先条件: 'preferred', 优先考虑: 'preferred',
+  到岗条件: 'availability', 到岗要求: 'availability', 出勤要求: 'availability',
+  技能标签: 'tags', 岗位标签: 'tags',
+};
+const STOPS = ['岗位职责', '工作职责', '职位描述', '岗位描述', '工作内容', '公司介绍', '公司简介', '关于我们', '福利待遇', '职位福利', '联系方式', '联系人', '招聘流程', '投递方式', '推荐职位', '相似职位', '其他职位', '你可能感兴趣'];
+const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const compact = (value: string) => value.replace(/\s/g, '');
+const names = [...Object.keys(LABELS), ...Object.keys(SECTIONS), ...STOPS].sort((a, b) => b.length - a.length);
+const labelPattern = names.map(name => [...name].map(escape).join('\\s*')).join('|');
+const cityNames = '北京|上海|天津|重庆|杭州|宁波|温州|嘉兴|湖州|绍兴|金华|台州|丽水|衢州|舟山|南京|苏州|无锡|常州|南通|镇江|扬州|徐州|合肥|芜湖|广州|深圳|珠海|佛山|东莞|惠州|中山|成都|武汉|西安|长沙|郑州|济南|青岛|厦门|福州|泉州|大连|沈阳|长春|哈尔滨|石家庄|太原|南昌|南宁|昆明|贵阳|海口|三亚|兰州|银川|西宁|乌鲁木齐|呼和浩特|拉萨';
+const cityPattern = new RegExp(`^(?:${cityNames})(?:市)?(?=$|[\\s·/、-]|[\\p{Script=Han}]{1,12}(?:区|县|路|街))`, 'u');
+const salaryPattern = /(?:[¥￥]\s*)?\d+(?:\.\d+)?\s*(?:(?:[kK]|万(?:元)?)?\s*[-—–~至]\s*\d+(?:\.\d+)?)?\s*(?:[kK](?:\s*\/\s*月)?|万(?:元)?(?:\s*\/\s*月)?|(?:元)?\s*\/\s*(?:天|日|月|小时|时)|元\s*[／/]?\s*(?:天|日|月|小时))(?:\s*[·x×*]\s*\d{1,2}薪)?/g;
+const educationPattern = /(?:大专|本科|硕士|博士|研究生)(?:\s*[/、或]\s*(?:大专|本科|硕士|博士|研究生))*(?:及以上|以上|在读)?|学历不限|不限学历/g;
+const skills: [string, string][] = [
+  ['TypeScript', 'TypeScript'], ['JavaScript', 'JavaScript'], ['Java', 'Java'], ['Python', 'Python'], ['C\\+\\+', 'C++'], ['C#', 'C#'],
+  ['Golang|Go', 'Go'], ['SQL', 'SQL'], ['MySQL', 'MySQL'], ['PostgreSQL', 'PostgreSQL'], ['Redis', 'Redis'], ['Linux', 'Linux'],
+  ['Docker', 'Docker'], ['Kubernetes|K8s', 'Kubernetes'], ['React(?:\\.js)?', 'React'], ['Vue(?:\\.js)?', 'Vue'], ['Node\\.?js', 'Node.js'],
+  ['Spring\\s*Boot', 'Spring Boot'], ['PyTorch', 'PyTorch'], ['TensorFlow', 'TensorFlow'], ['Git', 'Git'], ['Excel', 'Excel'], ['Figma', 'Figma'], ['Axure', 'Axure'],
+];
+function clean(value: string) { return value.trim().replace(/^[|;,\s]+|[|;,\s]+$/g, ''); }
+function bullet(value: string) { return value.replace(/^(?:[-•·]|\d+[.)、])\s*/, '').trim(); }
+function heading(value: string) { return compact(value.replace(/^[【\[]|[】\]]$/g, '').replace(/:$/, '')); }
+function isHeading(value: string) { const key = heading(value); return key in LABELS || key in SECTIONS || STOPS.includes(key); }
+
+/** Local, evidence-based extraction: explicit values beat layout hints; ambiguity stays blank. */
 export function extractJobFields(text: string): Fields {
   const result: Fields = { ...EMPTY_FIELDS, required: [], preferred: [], availability: [], tags: [] };
-  const lines = text.normalize('NFKC').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  const labels: Record<string, keyof Fields> = {
-    公司: 'company', 公司名称: 'company', 企业名称: 'company',
-    岗位: 'title', 岗位名称: 'title', 职位: 'title', 职位名称: 'title',
-    城市: 'city', 工作城市: 'city', 工作地点: 'city',
-    薪资: 'salary', 薪酬: 'salary', 薪资待遇: 'salary',
-    学历: 'education', 学历要求: 'education',
-    毕业年份: 'graduation_year', 毕业时间: 'graduation_year',
-    实习时长: 'internship_duration', 实习时间: 'internship_duration',
-    每周天数: 'days_per_week', 每周出勤: 'days_per_week',
-    岗位类型: 'job_type', 职位类型: 'job_type',
-  };
-  const values = new Map<keyof Fields, Set<string>>();
-  let section: 'required' | 'preferred' | null = null;
-  for (const line of lines) {
-    const heading = line.replace(/[:：]$/, '');
-    const sectionHeading = line.match(/^(任职要求|岗位要求|任职资格|加分项|优先条件)(?:[:：]\s*(.*))?$/);
-    if (sectionHeading) {
-      section = /加分|优先/.test(sectionHeading[1]) ? 'preferred' : 'required';
-      const inline = sectionHeading[2]?.trim();
-      if (inline && inline.length <= 2000 && !result[section].includes(inline) && result[section].length < 40) result[section].push(inline);
-      continue;
-    }
-    const pair = line.match(/^([^:：]{1,12})[:：]\s*(.+)$/);
-    if (pair && labels[pair[1].replace(/\s/g, '')]) {
-      section = null;
-      const key = labels[pair[1].replace(/\s/g, '')];
-      const value = pair[2].trim();
-      const limit = key === 'company' || key === 'title' ? 200 : 2000;
-      if (value.length <= limit) {
-        if (!values.has(key)) values.set(key, new Set());
-        values.get(key)!.add(value);
-      }
-    } else if (pair || /[:：]$/.test(line) || /^(岗位职责|工作职责|职位描述|公司介绍|福利待遇|联系方式)$/.test(heading)) {
-      section = null;
-    } else if (section && result[section].length < 40 && line.length <= 2000) {
-      const value = line.replace(/^(?:[-•·]|\d+[.)、])\s*/, '');
-      if (!result[section].includes(value)) result[section].push(value);
+  const explicit = new Map<Scalar, Set<string>>();
+  const inferred = new Map<Scalar, Set<string>>();
+  const lines = text.slice(0, 30000).normalize('NFKC').split(/\r?\n/).map(line => line.trim().replace(/\s+/g, ' ')).filter(Boolean);
+  const headers: string[] = [];
+  let inHeader = true;
+  let inDescription = false;
+  let section: Section | null = null;
+  let pending: Scalar | null = null;
+  let pendingLabel = '';
+  function add(key: Scalar, raw: string, direct = false, label = '') {
+    let value = clean(raw);
+    if (/^(立即沟通|立即投递|收藏|分享|查看全部职位|返回)$/.test(value)) return;
+    if ((key === 'company' || key === 'title') && (/^(实习|校招|社招|本科|硕士|博士|大专|学历不限)$/.test(value) || value.match(salaryPattern)?.join('') === value)) return;
+    if (!value || isHeading(value) || value.length > (key === 'company' || key === 'title' ? 200 : 2000)) return;
+    // A daily/monthly label is part of the salary's unit evidence.
+    if (key === 'salary' && /^(日薪|月薪)$/.test(label)) value = `${label} ${value}`;
+    const target = direct ? explicit : inferred;
+    if (!target.has(key)) target.set(key, new Set());
+    target.get(key)!.add(value);
+  }
+  function append(key: Section, raw: string) {
+    const value = bullet(raw);
+    if (value && value.length <= 2000 && result[key].length < 40 && !result[key].includes(value)) result[key].push(value);
+  }
+  function content(raw: string) {
+    if (section) {
+      if (section === 'tags') raw.split(/[,，、|]/).forEach(value => append('tags', value));
+      else append(section, raw);
+    } else if (inHeader) headers.push(raw);
+    else if (inDescription && /熟悉|掌握|熟练|具备|本科|硕士|博士|学历不限|每周|到岗|实习.*月|20\d{2}.*届|优先|加分/.test(raw)) {
+      append(/优先|加分/.test(raw) ? 'preferred' : 'required', raw);
     }
   }
-  for (const [key, candidates] of values) {
-    if (candidates.size === 1) Object.assign(result, { [key]: [...candidates][0] });
+  for (const line of lines) {
+    // Colon-separated fields can share a line, including OCR-spaced labels.
+    const markers = [...line.matchAll(new RegExp(`(?:^|[\\s|;,])(${labelPattern})\\s*:\\s*`, 'g'))];
+    const bare = heading(line);
+    if (markers.length || isHeading(line)) {
+      pending = null;
+      if (!markers.length) {
+        if (bare in LABELS) { pending = LABELS[bare]; pendingLabel = bare; section = null; }
+        else { section = SECTIONS[bare] || null; inHeader = false; inDescription = /^(职位描述|岗位描述)$/.test(bare); }
+        continue;
+      }
+      if (markers[0].index! > 0) content(line.slice(0, markers[0].index));
+      for (let i = 0; i < markers.length; i++) {
+        const marker = markers[i];
+        const name = compact(marker[1]);
+        // Also stop a value at an unknown labelled column, such as 联系电话:… .
+        const value = clean(line.slice(marker.index! + marker[0].length, markers[i + 1]?.index ?? line.length).replace(/\s+[^\s:|;,]{1,12}\s*:.*/, ''));
+        if (name in LABELS) {
+          section = null;
+          if (value) add(LABELS[name], value, true, name);
+          else { pending = LABELS[name]; pendingLabel = name; }
+        } else {
+          inHeader = false;
+          section = SECTIONS[name] || null;
+          inDescription = /^(职位描述|岗位描述)$/.test(name);
+          if (value) content(value);
+        }
+      }
+      continue;
+    }
+    // Common exports use a label, whitespace, then the value without a colon.
+    const spaced = line.match(new RegExp(`^(${labelPattern})\\s+(.+)$`));
+    if (spaced) {
+      pending = null;
+      const name = compact(spaced[1]);
+      if (name in LABELS) { add(LABELS[name], spaced[2], true, name); section = null; }
+      else { section = SECTIONS[name] || null; inHeader = false; inDescription = /^(职位描述|岗位描述)$/.test(name); content(spaced[2]); }
+      continue;
+    }
+    if (pending) {
+      // Do not put a whole metadata row or a different label into a pending field.
+      if (!/[|]|\s+[^\s:]{1,12}:/.test(line) && !/^[^:]{1,12}:/.test(line)) add(pending, line, true, pendingLabel);
+      pending = null;
+      continue;
+    }
+    if (/^[^:]{1,12}:\s*$/.test(line)) { section = null; inHeader = false; inDescription = false; continue; }
+    content(line);
+  }
+
+  // Only the page header supplies unlabelled company, title, location and salary.
+  // Responsibilities, company descriptions and recommended jobs cannot supply them.
+  for (const raw of headers) {
+    if (raw.length > 160 || /^(首页|职位列表|职位详情|招聘详情|返回|立即沟通|立即投递|收藏|分享)$/.test(raw)) continue;
+    const company = raw.length <= 80 && /(?:有限责任公司|有限公司|集团|科技|软件|网络|工作室)$/.test(raw) && !/[。:;|]/.test(raw);
+    if (company) { add('company', raw); continue; }
+    for (const match of raw.matchAll(salaryPattern)) add('salary', match[0]);
+    if (raw === '面议') add('salary', raw);
+    for (const token of raw.split(/[|;,\s]+/)) {
+      const city = token.match(cityPattern);
+      if (city) add('city', city[0]);
+    }
+    if (/实习/.test(raw)) add('job_type', '实习');
+    if (/校招|校园招聘/.test(raw)) add('job_type', '校招');
+    if (/社招|社会招聘/.test(raw)) add('job_type', '社招');
+    for (const part of raw.split(/[|;]/)) {
+      const title = clean(part.replace(salaryPattern, ''));
+      if (title.length <= 70 && /(?:工程师|实习生|实习岗|实习|开发|测试|设计师|分析师|产品经理|运营|助理|专员|研究员|管培生)(?:[（(][^()]{1,20}[)）])?$/.test(title)
+        && !/[。:;|]|急招|诚聘|招聘|熟悉|负责|要求|优先|经验|学历|本科|硕士|博士/.test(title)) add('title', title);
+    }
+  }
+  const conditions = [...headers, ...result.required, ...result.availability];
+  for (const raw of conditions.flatMap(line => line.split(/[,;。]/))) {
+    if (/优先|加分|无需|不要求|不需要/.test(raw) || /(?:有限责任公司|有限公司|集团|科技|软件|网络|工作室)$/.test(raw)) continue;
+    for (const match of raw.matchAll(educationPattern)) add('education', match[0]);
+    for (const match of raw.matchAll(/(?:每周|一周|周)\s*(?:至少|不少于|到岗|出勤|工作)?\s*[1-7一二三四五六七](?:\s*[-~至到]\s*[1-7一二三四五六七])?\s*天|[1-7一二三四五六七](?:\s*[-~至到]\s*[1-7一二三四五六七])?\s*天\s*\/\s*周/g)) add('days_per_week', match[0]);
+    for (const match of raw.matchAll(/实习(?:时长|时间|周期|期限)?\s*(?:至少|不少于|不低于|最短|需|需要|满|为)?\s*\d+(?:\s*[-~至到]\s*\d+)?\s*个?月(?:以上|起)?/g)) add('internship_duration', match[0]);
+    for (const match of raw.matchAll(/20\d{2}(?:\s*[-~/、]\s*(?:20)?\d{2})?\s*届|20\d{2}\s*年毕业/g)) add('graduation_year', match[0]);
+  }
+  for (const line of [...result.required]) {
+    if (/每周|实习.*月|到岗|入职/.test(line)) append('availability', line);
+  }
+  for (const key of Object.keys(EMPTY_FIELDS) as (keyof Fields)[]) {
+    if (['required', 'preferred', 'availability', 'tags'].includes(key)) continue;
+    const candidates = explicit.get(key as Scalar) ?? inferred.get(key as Scalar);
+    if (candidates?.size === 1) Object.assign(result, { [key]: [...candidates][0] });
+  }
+  if (!explicit.has('job_type') && !inferred.has('job_type')) {
+    if (/实习/.test(result.title)) result.job_type = '实习';
+    else if (/校招|校园招聘/.test(result.title)) result.job_type = '校招';
+    else if (/社招|社会招聘/.test(result.title)) result.job_type = '社招';
+  }
+  const skillText = [result.title, ...result.required, ...result.preferred];
+  for (const [pattern, name] of skills) {
+    if (skillText.some(line => [...line.matchAll(new RegExp(`(?<![a-z0-9_])(?:${pattern})(?![a-z0-9_])`, 'gi'))]
+      .some(match => !/(?:无需|不要求|不需要).{0,10}$/.test(line.slice(0, match.index).split(/[,;。]/).at(-1) || '')))) append('tags', name);
   }
   return result;
 }

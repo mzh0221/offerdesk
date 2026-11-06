@@ -20,6 +20,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           RELEASE_TAG="$(node -p "'v' + require('./desktop/package.json').version")"
+          gh api "repos/$GH_REPO/releases" --paginate --jq '.[].tag_name' > published-tags.txt
+          if ! grep -Fxq "$RELEASE_TAG" published-tags.txt; then
+            echo "Release not published yet; the packaging workflow will publish these notes."
+            exit 0
+          fi
           gh release edit "$RELEASE_TAG" --notes-file docs/release-notes.md
           gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > updated-release.json
           node -e "const fs = require('node:fs'); const actual = JSON.parse(fs.readFileSync('updated-release.json', 'utf8')).body; const expected = fs.readFileSync('docs/release-notes.md', 'utf8'); if (actual.trimEnd() !== expected.trimEnd()) process.exit(1)"
