@@ -38,7 +38,7 @@ export default function JobForm({ value, onChange, children }: {
             <summary>详细要求（选填）</summary>
             <div className="requirements-fields">
                 {([['required', '必备技能'], ['preferred', '加分项'], ['availability', '到岗条件']] as const).map(([key, label]) =>
-                    <label key={key}>{label}<textarea rows={3} maxLength={15000} value={value[key].join('\n')}
+                    <label key={key}>{label}<textarea aria-label={label} rows={3} maxLength={15000} value={value[key].join('\n')}
                         placeholder="一行一项；没有写明可以留空" onChange={e => onChange({ ...value, [key]: e.target.value.split('\n') })}/></label>)}
             </div>
         </details>

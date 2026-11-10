@@ -2,6 +2,106 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { extractJobFields } from '../lib/ocr-fields.ts';
 
+test('真实网页版式：档案不充当岗位，图标噪声不阻碍品牌名提取', () => {
+  const fields = extractJobFields('阿里 健康\n[|\nAl 应 用 研发 实习 生 (Agent 方向 )\n杭州 校 招 2026/10/30\n岗位 职责\n参与产品开发\n岗位 档案 POSITION FILE\n企业 阿里健康');
+  assert.equal(fields.company, '阿里健康');
+  assert.equal(fields.title, 'AI 应用研发实习生(Agent 方向)');
+  assert.equal(fields.job_type, '实习');
+});
+
+test('列表圆点OCR噪声、续行和多截图重复内容清理，不删除邮箱与账号', () => {
+  const fields = extractJobFields(`任职要求
+1. 基础条件
+人 @ 本 科 及 以 上 在 读
+2. 专业能力
+@ Java 基础扎实：了解 Spring、Maven
+等主流框架
+人 @@ 动手能力：有项目经验
+一 人 @ 高能动性：主动探索
+联系方式
+邮箱：developer@example.com
+任职要求
+@ Java 基础扎实：了解 Spring、Maven
+等 主流 框架
+@ 使用 user@example.com 配置通知
+@alice
+加分项
+@@ 了解 RAG、MCP
+Agent 工具调用
+国际访问 切换国内线路`);
+  assert.deepEqual(fields.required, ['本科及以上在读', 'Java 基础扎实:了解 Spring、Maven 等主流框架', '动手能力:有项目经验', '高能动性:主动探索', '使用 user@example.com 配置通知', '@alice']);
+  assert.deepEqual(fields.preferred, ['了解 RAG、MCP Agent 工具调用']);
+});
+
+test('聚合页把职责放在任职要求栏目时，以内层任职要求为准', () => {
+  const fields = extractJobFields(`REQUIREMENTS 具体 职责
+任职 要求 根据业务需要与个人兴趣，参与以下方向
+2. Al 基础 设施 建设
+人 @ 参与编排内核、状态持久化
+3. 服务与工程模块开发
+@ 负责服务接口
+任职 要求
+1. 基础 条件
+@ 本科及以上在读
+2. 专业 能力
+@ 掌握 Java
+加分项
+@ 有大模型应用经验`);
+  assert.deepEqual(fields.required, ['本科及以上在读', '掌握 Java']);
+  assert.deepEqual(fields.preferred, ['有大模型应用经验']);
+});
+
+test('招聘网页OCR中的导航、重复标题、品牌简称与中文空格', () => {
+  const fields = extractJobFields(`offerseek.ai
+人 offer 求索 首页 岗位聚合 投递工作台 岗位雷达 简历中心 登录
+让每个人都能找到适合自己的机会
+岗位 聚合 / AI 应用 研发 实习 生 (Agent 方向)
+阿里 健康
+[]
+AI 应用 研发 实习 生 (Agent 方向)
+杭州 校招 2026/10/30
+岗位职责
+参与智能体开发
+任职要求
+本 科 及 以 上 在 读，掌 握 Java 和 Spring Boot
+了解 LangGraph、RAG、MCP
+推荐职位
+公司：其他科技
+岗位：算法工程师`);
+  assert.equal(fields.company, '阿里健康');
+  assert.equal(fields.title, 'AI 应用研发实习生(Agent 方向)');
+  assert.equal(fields.city, '杭州');
+  assert.equal(fields.job_type, '实习');
+  assert.equal(fields.education, '本科及以上在读');
+  assert.equal(fields.salary, null);
+  assert.ok(fields.tags.includes('Spring Boot'));
+  assert.ok(fields.tags.includes('LangGraph'));
+});
+
+test('品牌简称推断需要标题与城市证据；正文和技术列表不作为公司', () => {
+  assert.equal(extractJobFields('阿里健康\n只是介绍公司').company, '');
+  assert.equal(extractJobFields('Java\n后端实习生\n杭州 校招').company, '');
+  assert.equal(extractJobFields('offerseek.ai\n后端实习生\n杭州 校招').company, '');
+  assert.equal(extractJobFields('岗位职责\n阿里 健康\n后端实习生\n杭州 校招').company, '');
+  const explicit = extractJobFields('阿里健康\n开发实习生\n杭州 校招\n公司名称：明确公司');
+  assert.equal(explicit.company, '明确公司');
+});
+
+test('字段值和条件中的中文空格归一化，英文技术词间隔保留', () => {
+  const fields = extractJobFields('公司 名称：测试 科技\n岗位名称：后端 开发 实习 生\n工作地点：杭 州\n学历要求：本 科 及 以 上\n岗位类型：实 习\n任职要求\n掌 握 Spring Boot 和 Java');
+  assert.equal(fields.company, '测试科技');
+  assert.equal(fields.city, '杭州');
+  assert.equal(fields.education, '本科及以上');
+  assert.equal(fields.job_type, '实习');
+  assert.ok(fields.required.includes('掌握 Spring Boot 和 Java'));
+});
+
+test('不同公司或岗位仍有歧义时留空；有明确类型时不覆盖', () => {
+  assert.equal(extractJobFields('甲品牌\n后端实习生\n杭州\n乙品牌\n后端实习生\n上海').company, '');
+  assert.equal(extractJobFields('阿里健康\n后端实习生\n前端实习生\n杭州').title, '');
+  assert.equal(extractJobFields('开发实习生\n岗位类型：校招').job_type, '校招');
+});
+
 test('明确标签提取岗位，保留薪资单位、技能标签与要求分区', () => {
   const fields = extractJobFields('公司名称：示例科技\n职位名称：开发实习生\n工作地点：杭州\n薪资：200-300元/天\n学历要求：本科\n每周出勤：4天\n实习时长：3个月\n毕业年份：2027\n岗位类型：实习\n任职要求：\n1. 熟悉 TypeScript\n加分项：\n- 开源经验\n福利待遇：\n免费午餐');
   assert.equal(fields.company, '示例科技');

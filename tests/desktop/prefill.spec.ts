@@ -3,6 +3,33 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+test('网页OCR空格与导航不阻碍品牌和标题预填，保存后保留原始文字', async () => {
+  const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-web-prefill-'));
+  const app = await electron.launch({
+    ...(process.env.OFFERDESK_TEST_EXECUTABLE ? { executablePath: process.env.OFFERDESK_TEST_EXECUTABLE } : {}),
+    args: [...(process.env.OFFERDESK_TEST_EXECUTABLE ? [] : ['desktop']), `--user-data-dir=${profile}`],
+  });
+  const raw = '首页 岗位聚合 投递工作台 简历中心 登录\n岗位 聚合 / AI 应用 研发 实习 生 (Agent 方向)\n阿里 健康\n[]\nAI 应用 研发 实习 生 (Agent 方向)\n杭州 校招 2026/10/30\n岗位职责\n参与 Agent 服务开发\n任职要求\n掌 握 Java 和 Spring Boot，了解 RAG 和 MCP';
+  try {
+    const page = await app.firstWindow();
+    await page.getByRole('button', { name: '文字录入', exact: true }).click();
+    await page.getByLabel('招聘原文', { exact: true }).fill(raw);
+    await page.getByRole('button', { name: '根据文字预填', exact: true }).click();
+    await expect(page.getByLabel(/公司名称/)).toHaveValue('阿里健康');
+    await expect(page.getByLabel(/岗位名称/)).toHaveValue('AI 应用研发实习生(Agent 方向)');
+    await expect(page.getByRole('combobox', { name: /^岗位类型/ })).toHaveValue('实习');
+    await expect(page.getByLabel('薪资原文', { exact: true })).toHaveValue('');
+    await page.getByRole('button', { name: '保存到岗位列表', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.locator('.job-title-button').click();
+    await page.getByText('原始招聘信息', { exact: false }).click();
+    await expect(page.locator('pre')).toHaveText(raw);
+  } finally {
+    await Promise.all([app.waitForEvent('close'), app.evaluate(({ app }) => app.exit(0)).catch(() => {})]);
+    await rm(profile, { recursive: true, force: true, maxRetries: 5 });
+  }
+});
+
 test('无标签手机版式预填、核对修改、保存与重启保留原文', async () => {
   const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-prefill-'));
   let app: ElectronApplication | undefined;

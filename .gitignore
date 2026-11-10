@@ -7,6 +7,7 @@ desktop/renderer-dist/
 release/
 test-results/
 playwright-report/
+local-data/
 *.p12
 *.pfx
 *.p8
@@ -14,3 +15,6 @@ playwright-report/
 *.csr
 *.certSigningRequest
 desktop/ocr-runtime/
+
+# Local screenshots used for manual OCR verification
+pngs/

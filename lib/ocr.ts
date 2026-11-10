@@ -1,3 +1,4 @@
+import { ocrImagePlan, type OcrRegion } from './ocr-image';
 export type OcrProgress = { id: string; status: string; progress: number };
 declare global {
   interface Window {
@@ -8,7 +9,7 @@ declare global {
     };
   }
 }
-export async function recognizeScreenshot(blob: Blob, signal: AbortSignal, progress: (value: number) => void): Promise<string> {
+export async function recognizeScreenshot(blob: Blob, signal: AbortSignal, progress: (value: number) => void, region?: OcrRegion): Promise<string> {
   const bridge = window.localOcr;
   if (!bridge) throw new Error('本地识别组件不可用，请重启应用');
   if (signal.aborted) throw new Error('识别已取消');
@@ -17,10 +18,12 @@ export async function recognizeScreenshot(blob: Blob, signal: AbortSignal, progr
   const bitmap = await createImageBitmap(blob);
   let normalized: Blob;
   try {
-    if (bitmap.width * bitmap.height > 40000000) throw new Error('截图尺寸过大，请拆分后识别');
+    const plan = ocrImagePlan(bitmap.width, bitmap.height, region);
     const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width; canvas.height = bitmap.height;
-    canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+    canvas.width = plan.outputWidth; canvas.height = plan.outputHeight;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, plan.x, plan.y, plan.width, plan.height, 0, 0, canvas.width, canvas.height);
     normalized = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('图片转换失败')), 'image/png'));
   } finally { bitmap.close(); }
   const bytes = new Uint8Array(await normalized.arrayBuffer());

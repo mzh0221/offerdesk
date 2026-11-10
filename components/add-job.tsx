@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Clipboard, LoaderCircle, X, ArrowUp, ArrowDown, ArrowLeft, Check, FileText } from 'lucide-react';
 import Dialog from './dialog';
+import OcrCrop from './ocr-crop';
+import type { OcrRegion } from '@/lib/ocr-image';
 import { useUnsavedChanges } from './use-unsaved-changes';
 import { recognizeScreenshot } from '@/lib/ocr';
 import { extractJobFields } from '@/lib/ocr-fields';
@@ -30,6 +32,8 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
     const [ocrErrors, setOcrErrors] = useState<string[]>([]);
     const [imageErrors, setImageErrors] = useState<Record<string, string>>({});
     const [activeImage, setActiveImage] = useState<string | null>(null);
+    const [regions, setRegions] = useState<(OcrRegion | null)[]>([]);
+    const [cropTarget, setCropTarget] = useState<{file: Blob; index: number} | null>(null);
     const controller = useRef<AbortController | null>(null);
     useEffect(() => () => controller.current?.abort(), []);
     const [source, setSource] = useState('');
@@ -47,7 +51,7 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
     const finished = useRef(false);
     const changingFiles = useRef(false);
     function body(nextFields = fields, overrides: Record<string, unknown> = {}) {
-        return { input_type: tab, raw_text: text, extracted: { ...cleanFields(nextFields), company: nextFields.company || '', title: nextFields.title || '' }, source_url: source, step, additional_text: additionalText, ...overrides };
+        return { input_type: tab, raw_text: text, extracted: { ...cleanFields(nextFields), company: nextFields.company || '', title: nextFields.title || '' }, source_url: source, step, additional_text: additionalText, ocr_regions: regions, ...overrides };
     }
     function snapshot(data = body(), images = files, existing = attachments) {
         return JSON.stringify({ data, images: images.map(f => [f.name, f.size, f.lastModified]), existing: existing.map(a => a.id) });
@@ -114,9 +118,9 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
             const existing = item.attachments || [];
             setTab(item.input_type); setAttachments(existing); setText(item.raw_text || '');
             setRecognized(Boolean(item.raw_text)); setTextEdited(Boolean(item.raw_text));
-            setFields(nextFields); setStep(nextStep); setSource(item.source_url || ''); setAdditionalText(item.additional_text || '');
+            setFields(nextFields); setStep(nextStep); setSource(item.source_url || ''); setAdditionalText(item.additional_text || ''); setRegions(item.ocr_regions || []);
             savedFiles.current = files;
-            setSavedSnapshot(snapshot({ input_type: item.input_type, raw_text: item.raw_text || '', extracted: nextFields, source_url: item.source_url || '', step: nextStep, additional_text: item.additional_text || '' }, files, existing));
+            setSavedSnapshot(snapshot({ input_type: item.input_type, raw_text: item.raw_text || '', extracted: nextFields, source_url: item.source_url || '', step: nextStep, additional_text: item.additional_text || '', ocr_regions: item.ocr_regions || [] }, files, existing));
         }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) { setBusy(false); setLoadingDraft(false); } });
         return () => { active = false; };
     }, [resume]);
@@ -126,8 +130,8 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
         setBusy(true); setError('');
         try {
             const next = typeof selection === 'function' ? await selection() : selection;
-            await writeDraft(body(fields, { input_type: 'images' }), next, [], true);
-            setFiles(next); setAttachments([]); setOcrResults({}); setRecognized(Boolean(text));
+            await writeDraft(body(fields, { input_type: 'images', ocr_regions: [] }), next, [], true);
+            setFiles(next); setAttachments([]); setRegions([]); setCropTarget(null); setOcrResults({}); setRecognized(Boolean(text));
             setTextEdited(Boolean(text)); setOcrErrors([]); setImageErrors({});
         } catch (e) { setError(e instanceof Error ? e.message : '更新截图失败'); }
         finally { changingFiles.current = false; setBusy(false); }
@@ -137,8 +141,8 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
         setBusy(true); setError('');
         try {
             if ((files.length || attachments.length) && !window.confirm('切换录入方式会移除当前截图，是否继续？')) return;
-            if (hasContent) await writeDraft(body(fields, { input_type: next, additional_text: '' }), [], [], true);
-            setFiles([]);
+            if (hasContent) await writeDraft(body(fields, { input_type: next, additional_text: '', ocr_regions: [] }), [], [], true);
+            setFiles([]); setRegions([]); setCropTarget(null);
             setTab(next); setOcrResults({}); setOcrErrors([]); setImageErrors({}); setRecognized(false); setAdditionalText(''); setAttachments([]);
         } catch (e) { setError(e instanceof Error ? e.message : '切换录入方式失败'); }
         finally { setBusy(false); }
@@ -188,7 +192,7 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
                 try {
                     setActiveImage(image.key);
                     setProgress(`正在识别第 ${index + 1}/${images.length} 张`);
-                    const recognizedText = await recognizeScreenshot(await image.blob(), abort.signal, value => setProgress(`正在识别第 ${index + 1}/${images.length} 张 · ${Math.round(value * 100)}%`));
+                    const recognizedText = await recognizeScreenshot(await image.blob(), abort.signal, value => setProgress(`正在识别第 ${index + 1}/${images.length} 张 · ${Math.round(value * 100)}%`), regions[index] || undefined);
                     if (!recognizedText.trim()) throw new Error('未识别到文字，请更换清晰截图');
                     results[image.key] = recognizedText;
                     setOcrResults({ ...results });
@@ -208,6 +212,23 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
             if (abort.signal.aborted) setError('识别已取消，已完成的文字仍可使用');
             else if (!Object.values(results).some(value => value.trim())) setError('未识别到文字，可更换清晰截图或手动填写');
         } finally { controller.current = null; setBusy(false); setActiveImage(null); setProgress(''); }
+    }
+    async function openCrop(index: number) {
+        if (busy) return;
+        setBusy(true); setError('');
+        try { setCropTarget({ index, file: files[index] || await api.file(attachments[index].id) }); }
+        catch (e) { setError(e instanceof Error ? e.message : '读取图片失败'); }
+        finally { setBusy(false); }
+    }
+    function applyCrop(region: OcrRegion) {
+        if (!cropTarget) return;
+        const index = cropTarget.index, key = files.length ? `${index}:${files[index].name}` : attachments[index].id;
+        setRegions(current => Array.from({ length: files.length || attachments.length }, (_, i) => i === index ? region : current[i] || null));
+        setOcrResults(current => { const next = { ...current }; delete next[key]; return next; });
+        setTextEdited(Boolean(text)); setCropTarget(null);
+    }
+    function cropControl(index: number) {
+        return <button type="button" className="text-button crop-control" disabled={busy} onClick={() => void openCrop(index)}>{regions[index] ? '调整识别区域' : '框选识别区域'}</button>;
     }
     function imageStatus(key: string) {
         const failed = !!imageErrors[key];
@@ -251,7 +272,8 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
     {confirmClose && <div className="leave-prompt" role="alertdialog" aria-label="保存未完成录入"><strong>有尚未保存的录入内容</strong><div><button className="primary" disabled={busy} autoFocus onClick={keepDraft}>保存草稿并关闭</button><button className="secondary" disabled={busy} onClick={discardDraft}>放弃录入</button><button className="text-button" disabled={busy} onClick={() => setConfirmClose(false)}>继续编辑</button></div></div>}
     {error && <div className="notice error" role="alert">{error}</div>}
     {step === 'input' ? <><div className="segmented"><button className={tab === 'images' ? 'selected' : ''} disabled={busy} onClick={() => void changeTab('images')}><ImagePlus size={16}/>上传截图</button><button className={tab === 'text' ? 'selected' : ''} disabled={busy} onClick={() => void changeTab('text')}><Clipboard size={16}/>粘贴文字</button></div>
-      {tab === 'images' ? <><label className={`upload-zone ${busy ? 'disabled' : ''}`} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); void addFiles(Array.from(e.dataTransfer.files)); }}><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={e => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }}/><span className="upload-icon"><ImagePlus size={30}/></span><strong>把岗位截图放在这里</strong><span>点击选择、拖拽图片，或直接 Ctrl / ⌘ + V 粘贴</span><small>同一岗位最多 5 张 · JPG / PNG / WebP · 每张 ≤ 5MB</small></label><div className="image-grid">{files.map((f, i) => <div className="upload-preview" key={`${f.name}-${i}`}><Preview file={f}/><div><span>{i + 1}. {f.name}</span><button disabled={busy || i === 0} className="icon-button" aria-label="前移截图" onClick={() => swap(i, -1)}><ArrowUp size={13}/></button><button disabled={busy || i === files.length - 1} className="icon-button" aria-label="后移截图" onClick={() => swap(i, 1)}><ArrowDown size={13}/></button><button disabled={busy} className="icon-button" aria-label="移除截图" onClick={() => void replaceFiles(files.filter((_, idx) => idx !== i))}><X size={14}/></button></div>{imageStatus(`${i}:${f.name}`)}</div>)}{attachments.map((a, i) => <div key={a.id}><AttachmentImage item={a}/>{imageStatus(a.id)}<div className="attachment-actions"><button className="icon-button" aria-label="前移截图" disabled={busy || i === 0} onClick={() => void editAttachment(i, -1)}><ArrowUp size={14}/></button><button className="icon-button" aria-label="后移截图" disabled={busy || i === attachments.length - 1} onClick={() => void editAttachment(i, 1)}><ArrowDown size={14}/></button><button className="icon-button" aria-label="移除截图" disabled={busy} onClick={() => void editAttachment(i)}><X size={14}/></button></div></div>)}</div><div className="hint"><FileText size={16}/><p>上传同一岗位的介绍和要求，在本机离线识别。<br /><span>一次录入一个岗位，截图与岗位信息一起保存在本地。</span></p></div></> : <label className="text-import">招聘原文<textarea aria-label="招聘原文" rows={12} maxLength={30000} value={text} disabled={busy} onChange={e => { setText(e.target.value); setTextEdited(true); }} placeholder="把公司、岗位介绍、任职要求粘贴到这里…"/></label>}
+      {tab === 'images' ? <><label className={`upload-zone ${busy ? 'disabled' : ''}`} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); void addFiles(Array.from(e.dataTransfer.files)); }}><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={e => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }}/><span className="upload-icon"><ImagePlus size={30}/></span><strong>把岗位截图放在这里</strong><span>点击选择、拖拽图片，或直接 Ctrl / ⌘ + V 粘贴</span><small>同一岗位最多 5 张 · JPG / PNG / WebP · 每张 ≤ 5MB</small></label><div className="image-grid">{files.map((f, i) => <div className="upload-preview" key={`${f.name}-${i}`}><Preview file={f}/><div><span>{i + 1}. {f.name}</span><button disabled={busy || i === 0} className="icon-button" aria-label="前移截图" onClick={() => swap(i, -1)}><ArrowUp size={13}/></button><button disabled={busy || i === files.length - 1} className="icon-button" aria-label="后移截图" onClick={() => swap(i, 1)}><ArrowDown size={13}/></button><button disabled={busy} className="icon-button" aria-label="移除截图" onClick={() => void replaceFiles(files.filter((_, idx) => idx !== i))}><X size={14}/></button></div>{imageStatus(`${i}:${f.name}`)}{cropControl(i)}</div>)}{attachments.map((a, i) => <div key={a.id}><AttachmentImage item={a}/>{imageStatus(a.id)}{cropControl(i)}<div className="attachment-actions"><button className="icon-button" aria-label="前移截图" disabled={busy || i === 0} onClick={() => void editAttachment(i, -1)}><ArrowUp size={14}/></button><button className="icon-button" aria-label="后移截图" disabled={busy || i === attachments.length - 1} onClick={() => void editAttachment(i, 1)}><ArrowDown size={14}/></button><button className="icon-button" aria-label="移除截图" disabled={busy} onClick={() => void editAttachment(i)}><X size={14}/></button></div></div>)}</div><div className="hint"><FileText size={16}/><p>上传同一岗位的介绍和要求，在本机离线识别。<br /><span>一次录入一个岗位，截图与岗位信息一起保存在本地。</span></p></div></> : <label className="text-import">招聘原文<textarea aria-label="招聘原文" rows={12} maxLength={30000} value={text} disabled={busy} onChange={e => { setText(e.target.value); setTextEdited(true); }} placeholder="把公司、岗位介绍、任职要求粘贴到这里…"/></label>}
+      {cropTarget && <OcrCrop key={cropTarget.index} file={cropTarget.file} initial={regions[cropTarget.index] || undefined} onApply={applyCrop} onCancel={() => setCropTarget(null)}/>}
       {tab === 'images' && recognized && <label className="text-import">识别原文（可修改）<textarea aria-label="识别原文（可修改）" rows={10} maxLength={30000} value={text} disabled={busy} onChange={e => { setText(e.target.value); setTextEdited(true); }} /></label>}
       {additionalText && <div><button className="secondary" disabled={busy || text.length + additionalText.length + 2 > 30000} onClick={() => { setText([text, additionalText].filter(Boolean).join('\n\n')); setTextEdited(true); setAdditionalText(''); }}>插入原文</button><label className="text-import">重试新增文字<textarea rows={5} value={additionalText} readOnly /></label><p className="form-help">插入会保留已有原文；合并后最多 30000 字。</p></div>}
       {ocrErrors.length > 0 && <div className="notice error" role="alert">{ocrErrors.map(issue => <p key={issue}>{issue}</p>)}</div>}

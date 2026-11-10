@@ -3,7 +3,7 @@ import { EMPTY_FIELDS, type Fields } from './domain.ts';
 type Scalar = Exclude<keyof Fields, 'required' | 'preferred' | 'availability' | 'tags'>;
 type Section = 'required' | 'preferred' | 'availability' | 'tags';
 const LABELS: Record<string, Scalar> = {
-  公司: 'company', 公司名称: 'company', 企业名称: 'company', 招聘公司: 'company', 所属公司: 'company', 用人单位: 'company',
+  公司: 'company', 公司名称: 'company', 企业: 'company', 企业名称: 'company', 招聘公司: 'company', 所属公司: 'company', 用人单位: 'company',
   岗位: 'title', 岗位名称: 'title', 职位: 'title', 职位名称: 'title', 招聘岗位: 'title', 招聘职位: 'title',
   城市: 'city', 工作城市: 'city', 工作地点: 'city', 工作地址: 'city', 办公地点: 'city',
   薪资: 'salary', 薪酬: 'salary', 薪资待遇: 'salary', 薪资范围: 'salary', 工资待遇: 'salary', 日薪: 'salary', 月薪: 'salary',
@@ -27,24 +27,83 @@ const labelPattern = names.map(name => [...name].map(escape).join('\\s*')).join(
 const cityNames = '北京|上海|天津|重庆|杭州|宁波|温州|嘉兴|湖州|绍兴|金华|台州|丽水|衢州|舟山|南京|苏州|无锡|常州|南通|镇江|扬州|徐州|合肥|芜湖|广州|深圳|珠海|佛山|东莞|惠州|中山|成都|武汉|西安|长沙|郑州|济南|青岛|厦门|福州|泉州|大连|沈阳|长春|哈尔滨|石家庄|太原|南昌|南宁|昆明|贵阳|海口|三亚|兰州|银川|西宁|乌鲁木齐|呼和浩特|拉萨';
 const cityPattern = new RegExp(`^(?:${cityNames})(?:市)?(?=$|[\\s·/、-]|[\\p{Script=Han}]{1,12}(?:区|县|路|街))`, 'u');
 const salaryPattern = /(?:[¥￥]\s*)?\d+(?:\.\d+)?\s*(?:(?:[kK]|万(?:元)?)?\s*[-—–~至]\s*\d+(?:\.\d+)?)?\s*(?:[kK](?:\s*\/\s*月)?|万(?:元)?(?:\s*\/\s*月)?|(?:元)?\s*\/\s*(?:天|日|月|小时|时)|元\s*[／/]?\s*(?:天|日|月|小时))(?:\s*[·x×*]\s*\d{1,2}薪)?/g;
-const educationPattern = /(?:大专|本科|硕士|博士|研究生)(?:\s*[/、或]\s*(?:大专|本科|硕士|博士|研究生))*(?:及以上|以上|在读)?|学历不限|不限学历/g;
+const educationPattern = /(?:大专|本科|硕士|博士|研究生)(?:\s*[/、或]\s*(?:大专|本科|硕士|博士|研究生))*(?:及以上|以上)?(?:在读)?|学历不限|不限学历/g;
 const skills: [string, string][] = [
   ['TypeScript', 'TypeScript'], ['JavaScript', 'JavaScript'], ['Java', 'Java'], ['Python', 'Python'], ['C\\+\\+', 'C++'], ['C#', 'C#'],
   ['Golang|Go', 'Go'], ['SQL', 'SQL'], ['MySQL', 'MySQL'], ['PostgreSQL', 'PostgreSQL'], ['Redis', 'Redis'], ['Linux', 'Linux'],
   ['Docker', 'Docker'], ['Kubernetes|K8s', 'Kubernetes'], ['React(?:\\.js)?', 'React'], ['Vue(?:\\.js)?', 'Vue'], ['Node\\.?js', 'Node.js'],
   ['Spring\\s*Boot', 'Spring Boot'], ['PyTorch', 'PyTorch'], ['TensorFlow', 'TensorFlow'], ['Git', 'Git'], ['Excel', 'Excel'], ['Figma', 'Figma'], ['Axure', 'Axure'],
+  ['LangChain', 'LangChain'], ['LangGraph', 'LangGraph'], ['RAG', 'RAG'], ['MCP', 'MCP'], ['FastAPI', 'FastAPI'], ['Agent', 'Agent'],
+  ['Spring(?!\\s*Boot)', 'Spring'], ['Maven', 'Maven'],
 ];
+// Normalize a derived parsing copy only; keep the editable OCR original untouched.
+function joinChinese(value: string) { return value.replace(/([\p{Script=Han}])\s+(?=[\p{Script=Han}])/gu, '$1'); }
+function headerText(value: string) { return joinChinese(value).replace(/\s+\(/g, '(').replace(/\(\s+|\s+\)/g, m => m.trim()); }
+function navigation(value: string) {
+  const text = compact(value);
+  return /^(?:岗位聚合|职位聚合|首页)\s*[/／>›]/.test(text)
+    || /^(?:岗位档案|职位档案)(?:POSITIONFILE)?$/i.test(text)
+    || /^(?:[\[\]|¦Il\s]+)$/.test(value)
+    || /^(?:上旦|田[~～])/.test(text)
+    || /国际访问.*切换国内线路|^(?:发布|更新)日期\d|^申请截止|登录后前往企业官方投递/.test(text)
+    || /^(?:https?:\/\/|www\.)/i.test(text)
+    || /^(?:[a-z0-9-]+\.)+(?:com|cn|ai|org|net)(?:[/:\s]|$)/i.test(value)
+    || (text.match(/首页|岗位聚合|职位聚合|投递工作台|简历中心|岗位雷达|登录/g)?.length || 0) >= 2
+    || /^(?:登录后去投递|立即投递|收藏|分享|返回|让每个人都能找到适合自己的机会|\[\]|\[I\])$/.test(text);
+}
+function titleText(value: string) {
+  const title = clean(headerText(value).replace(salaryPattern, ''));
+  return title.length <= 70 && /(?:工程师|实习生|实习岗|实习|开发|测试|设计师|分析师|产品经理|运营|助理|专员|研究员|管培生)(?:\([^()]{1,30}\))?$/.test(title)
+    && !/[。:;|/]|急招|诚聘|招聘|熟悉|负责|要求|优先|经验|学历|本科|硕士|博士/.test(title) ? title : null;
+}
+const metadataCity = new RegExp(`^(?:${cityNames})(?:市)?(?=实习|校招|社招|本科|硕士|博士|20\\d{2}|$)`);
+function metadata(value: string) {
+  return !!compact(value).match(metadataCity) || /^(?:实习|校招|社招|本科|硕士|博士)(?:\s|\||$)/.test(value);
+}
 function clean(value: string) { return value.trim().replace(/^[|;,\s]+|[|;,\s]+$/g, ''); }
-function bullet(value: string) { return value.replace(/^(?:[-•·]|\d+[.)、])\s*/, '').trim(); }
+function bullet(value: string) {
+  return value.replace(/^(?:[-•·●○▪◆]|\d+[.)、](?!\d)|(?:[一人小生全侠]\s*)*@+(?=\s|\p{Script=Han}))\s*/u, '').trim();
+}
 function heading(value: string) { return compact(value.replace(/^[【\[]|[】\]]$/g, '').replace(/:$/, '')); }
 function isHeading(value: string) { const key = heading(value); return key in LABELS || key in SECTIONS || STOPS.includes(key); }
+
+/** Repair list layout on a parsing copy; never remove @ inside emails or handles. */
+function parsingLines(text: string) {
+  const lines: string[] = [];
+  let listItem = false;
+  for (const raw of text.slice(0, 30000).normalize('NFKC').split(/\r?\n/)) {
+    let line = raw.trim().replace(/\s+/g, ' ');
+    if (!line) continue;
+    if (navigation(line) || /^[人小全一]$/.test(line)) { listItem = false; continue; }
+    line = line.replace(/\s*(?:后\s*)?有\s*问\s*题.*找\s*我.*$/, '').trim();
+    if (!line) continue;
+    if (/^RESPONSIBILITIES\b/i.test(line)) line = '岗位职责';
+    else if (/^REQUIREMENTS\b/i.test(line)) line = /具体\s*职责/.test(line) ? '具体职责' : '任职要求';
+    const normalized = line.replace(/\bAl(?=\s*(?:应\s*用|基\s*础|编\s*程))/g, 'AI');
+    if (/^(?:任职要求)?根据业务需要与个人兴趣/.test(compact(normalized)) || normalized === '具体职责') {
+      lines.push('岗位职责'); listItem = false; continue;
+    }
+    // Numbered group captions describe sections, not skills or requirements.
+    if (/^\d+[.)、]\s*(?:基础条件|专业能力|能力特质|(?:AI\s*)?基础设施建设|服务与工程模块开发|工程质量与治理|Agent\s*应用开发)[一二三]?$/i.test(joinChinese(normalized))) {
+      listItem = false; continue;
+    }
+    const item = bullet(normalized), startsItem = item !== normalized;
+    const boundary = isHeading(normalized) || new RegExp(`^(?:${labelPattern})(?:\\s|:)`).test(line)
+      || /^(?:\d+[.)、]|[^:]{1,15}:|@[a-z0-9_]|上\s*旦|田\s*~)/i.test(normalized);
+    if (listItem && !startsItem && !boundary && lines.length) {
+      lines[lines.length - 1] = joinChinese(`${lines[lines.length - 1]} ${item}`);
+    } else { lines.push(item); listItem = startsItem; }
+    if (boundary && !startsItem) listItem = false;
+  }
+  return lines;
+}
 
 /** Local, evidence-based extraction: explicit values beat layout hints; ambiguity stays blank. */
 export function extractJobFields(text: string): Fields {
   const result: Fields = { ...EMPTY_FIELDS, required: [], preferred: [], availability: [], tags: [] };
   const explicit = new Map<Scalar, Set<string>>();
   const inferred = new Map<Scalar, Set<string>>();
-  const lines = text.slice(0, 30000).normalize('NFKC').split(/\r?\n/).map(line => line.trim().replace(/\s+/g, ' ')).filter(Boolean);
+  const lines = parsingLines(text);
   const headers: string[] = [];
   let inHeader = true;
   let inDescription = false;
@@ -52,7 +111,7 @@ export function extractJobFields(text: string): Fields {
   let pending: Scalar | null = null;
   let pendingLabel = '';
   function add(key: Scalar, raw: string, direct = false, label = '') {
-    let value = clean(raw);
+    let value = clean(key === 'company' || key === 'title' ? headerText(raw) : key === 'salary' ? raw : joinChinese(raw));
     if (/^(立即沟通|立即投递|收藏|分享|查看全部职位|返回)$/.test(value)) return;
     if ((key === 'company' || key === 'title') && (/^(实习|校招|社招|本科|硕士|博士|大专|学历不限)$/.test(value) || value.match(salaryPattern)?.join('') === value)) return;
     if (!value || isHeading(value) || value.length > (key === 'company' || key === 'title' ? 200 : 2000)) return;
@@ -64,10 +123,12 @@ export function extractJobFields(text: string): Fields {
   }
   function append(key: Section, raw: string) {
     const value = bullet(raw);
-    if (value && value.length <= 2000 && result[key].length < 40 && !result[key].includes(value)) result[key].push(value);
+    const identity = (s: string) => s.replace(/[\s,，、;；。]/g, '').toLowerCase();
+    if (value && value.length <= 2000 && result[key].length < 40 && !result[key].some(item => identity(item) === identity(value))) result[key].push(value);
   }
   function content(raw: string) {
     if (section) {
+      raw = joinChinese(raw);
       if (section === 'tags') raw.split(/[,，、|]/).forEach(value => append('tags', value));
       else append(section, raw);
     } else if (inHeader) headers.push(raw);
@@ -76,6 +137,8 @@ export function extractJobFields(text: string): Fields {
     }
   }
   for (const line of lines) {
+    if (navigation(line)) continue;
+    if (/^(推荐职位|相似职位|其他职位|你可能感兴趣)$/.test(heading(line))) break;
     // Colon-separated fields can share a line, including OCR-spaced labels.
     const markers = [...line.matchAll(new RegExp(`(?:^|[\\s|;,])(${labelPattern})\\s*:\\s*`, 'g'))];
     const bare = heading(line);
@@ -126,27 +189,47 @@ export function extractJobFields(text: string): Fields {
 
   // Only the page header supplies unlabelled company, title, location and salary.
   // Responsibilities, company descriptions and recommended jobs cannot supply them.
-  for (const raw of headers) {
+  for (const original of headers) {
+    const raw = headerText(original);
     if (raw.length > 160 || /^(首页|职位列表|职位详情|招聘详情|返回|立即沟通|立即投递|收藏|分享)$/.test(raw)) continue;
     const company = raw.length <= 80 && /(?:有限责任公司|有限公司|集团|科技|软件|网络|工作室)$/.test(raw) && !/[。:;|]/.test(raw);
     if (company) { add('company', raw); continue; }
     for (const match of raw.matchAll(salaryPattern)) add('salary', match[0]);
     if (raw === '面议') add('salary', raw);
-    for (const token of raw.split(/[|;,\s]+/)) {
+    for (const token of original.split(/[|;,\s]+/)) {
       const city = token.match(cityPattern);
       if (city) add('city', city[0]);
     }
+    const joinedCity = compact(original).match(metadataCity);
+    if (joinedCity) add('city', joinedCity[0]);
     if (/实习/.test(raw)) add('job_type', '实习');
     if (/校招|校园招聘/.test(raw)) add('job_type', '校招');
     if (/社招|社会招聘/.test(raw)) add('job_type', '社招');
     for (const part of raw.split(/[|;]/)) {
-      const title = clean(part.replace(salaryPattern, ''));
-      if (title.length <= 70 && /(?:工程师|实习生|实习岗|实习|开发|测试|设计师|分析师|产品经理|运营|助理|专员|研究员|管培生)(?:[（(][^()]{1,20}[)）])?$/.test(title)
-        && !/[。:;|]|急招|诚聘|招聘|熟悉|负责|要求|优先|经验|学历|本科|硕士|博士/.test(title)) add('title', title);
+      const title = titleText(part);
+      if (title) add('title', title);
     }
   }
+  // A short brand name needs structural evidence: unique title + adjacent metadata.
+  // Do not guess a company from arbitrary prose, technology lists or recommendations.
+  const titles = explicit.get('title') ?? inferred.get('title');
+  if (!explicit.has('company') && !inferred.has('company') && titles?.size === 1) {
+    const title = [...titles][0];
+    headers.forEach((line, index) => {
+      if (titleText(line) !== title || !headers.slice(index + 1, index + 3).some(metadata)) return;
+      for (const candidate of [headers[index - 1], headers[index + 1]]) {
+        if (!candidate) continue;
+        const name = headerText(candidate);
+        if (name.length < 2 || name.length > 40 || !/^[\p{Script=Han}A-Za-z][\p{Script=Han}A-Za-z0-9 &·.-]+$/u.test(name)
+          || metadata(candidate) || isHeading(name) || titleText(name) || navigation(name)
+          || /实习|校招|社招|本科|硕士|博士|经验|要求|欢迎|机会|职责|岗位|职位|首页|登录/.test(name)
+          || skills.some(([pattern]) => new RegExp(`^(?:${pattern})$`, 'i').test(name))) continue;
+        add('company', name);
+      }
+    });
+  }
   const conditions = [...headers, ...result.required, ...result.availability];
-  for (const raw of conditions.flatMap(line => line.split(/[,;。]/))) {
+  for (const raw of conditions.flatMap(line => joinChinese(line).split(/[,;。]/))) {
     if (/优先|加分|无需|不要求|不需要/.test(raw) || /(?:有限责任公司|有限公司|集团|科技|软件|网络|工作室)$/.test(raw)) continue;
     for (const match of raw.matchAll(educationPattern)) add('education', match[0]);
     for (const match of raw.matchAll(/(?:每周|一周|周)\s*(?:至少|不少于|到岗|出勤|工作)?\s*[1-7一二三四五六七](?:\s*[-~至到]\s*[1-7一二三四五六七])?\s*天|[1-7一二三四五六七](?:\s*[-~至到]\s*[1-7一二三四五六七])?\s*天\s*\/\s*周/g)) add('days_per_week', match[0]);
@@ -161,7 +244,7 @@ export function extractJobFields(text: string): Fields {
     const candidates = explicit.get(key as Scalar) ?? inferred.get(key as Scalar);
     if (candidates?.size === 1) Object.assign(result, { [key]: [...candidates][0] });
   }
-  if (!explicit.has('job_type') && !inferred.has('job_type')) {
+  if (!explicit.has('job_type') && result.title) {
     if (/实习/.test(result.title)) result.job_type = '实习';
     else if (/校招|校园招聘/.test(result.title)) result.job_type = '校招';
     else if (/社招|社会招聘/.test(result.title)) result.job_type = '社招';

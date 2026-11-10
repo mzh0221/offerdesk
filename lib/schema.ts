@@ -10,5 +10,7 @@ export const draftSchema = importSchema.extend({
     source_url: z.string().max(2000).optional(),
     step: z.enum(['input', 'review']).optional(),
     additional_text: z.string().max(30000).optional(),
+    ocr_regions: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().positive().max(1), height: z.number().positive().max(1) })
+        .refine(r => r.x + r.width <= 1.000001 && r.y + r.height <= 1.000001).nullable()).max(5).optional(),
 });
 export const uploadsSchema = z.object({ files: z.array(z.object({ name: z.string().max(250), mime: z.enum(['image/jpeg', 'image/png', 'image/webp']), size: z.number().int().positive().max(5 * 1024 * 1024) })).min(1).max(5) });
