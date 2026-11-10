@@ -1,8 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EMPTY_FIELDS } from '../lib/domain.ts';
-import { jobSchema, uploadsSchema } from '../lib/schema.ts';
+import { jobSchema, uploadsSchema, draftSchema } from '../lib/schema.ts';
 const job = { ...EMPTY_FIELDS, company: '公司', title: '岗位', source_url: null, notes: '', status: '待投递', applied_at: null, import_id: null };
+test('旧草稿无需迁移，新草稿可保留未完成链接、步骤和补识别文字', () => {
+    assert.equal(draftSchema.safeParse({ input_type: 'text', raw_text: '旧原文' }).success, true);
+    const draft = draftSchema.parse({ input_type: 'images', raw_text: '人工修正', source_url: 'https://尚未输完', step: 'review', additional_text: '新增文字' });
+    assert.equal(draft.source_url, 'https://尚未输完');
+    assert.equal(draft.additional_text, '新增文字');
+    assert.equal(draftSchema.safeParse({ ...draft, step: 'unknown' }).success, false);
+});
 test('完整岗位可以保存，未知字段不会被写入数据库', () => { const parsed = jobSchema.parse({ ...job, unexpected: 'forged', search_text: 'forged' }); assert.equal('unexpected' in parsed, false); assert.equal('search_text' in parsed, false); });
 test('拒绝空公司、岗位和非法状态', () => { assert.equal(jobSchema.safeParse({ ...job, company: '   ' }).success, false); assert.equal(jobSchema.safeParse({ ...job, title: '' }).success, false); assert.equal(jobSchema.safeParse({ ...job, status: '编造状态' }).success, false); });
 test('拒绝错误日期和危险链接，接受真实HTTP招聘链接', () => { assert.equal(jobSchema.safeParse({ ...job, applied_at: '2026-02-30' }).success, false); assert.equal(jobSchema.safeParse({ ...job, source_url: 'javascript:alert(1)' }).success, false); assert.equal(jobSchema.safeParse({ ...job, source_url: 'https://example.com/jobs/1' }).success, true); });

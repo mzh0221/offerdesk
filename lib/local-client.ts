@@ -1,4 +1,4 @@
-import { localRequest, getScreenshotUrl, saveImportDraft } from './local-store';
+import { localRequest, getScreenshotUrl, getScreenshotFile, saveImportDraft } from './local-store';
 import { looksLikeImage, validateImage } from './domain';
 import { uploadsSchema } from './schema';
 
@@ -23,4 +23,4 @@ async function draft(id: string | null, body: Record<string, unknown>, files?: F
     if (files !== undefined) await validateScreenshots(files);
     return saveImportDraft(id, body, files);
 }
-export const localClient = { request: localRequest, draft, image: getScreenshotUrl };
+export const localClient = { request: localRequest, draft, image: getScreenshotUrl, file: getScreenshotFile };

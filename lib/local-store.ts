@@ -1,5 +1,5 @@
 import { filterJobs, nextAppliedDate, type Job } from './domain';
-import { fieldsSchema, importSchema, jobSchema } from './schema';
+import { fieldsSchema, importSchema, draftSchema, jobSchema } from './schema';
 type Row = {
     id: string;
     kind: string;
@@ -31,12 +31,12 @@ async function writeRows<T>(run: (store: IDBObjectStore, rows: Row[], result: (v
 const orderedAttachments = (rows: Row[], importId: unknown) => rows.filter(row => row.kind === 'attachment' && row.import_id === importId).sort((a, b) => Number(a.position) - Number(b.position) || a.id.localeCompare(b.id));
 
 export async function saveImportDraft(id: string | null, body: Record<string, unknown>, files?: File[]) {
-    const data = { ...importSchema.parse(body), extracted: fieldsSchema.parse(body.extracted) };
+    const data = { ...draftSchema.parse(body), extracted: fieldsSchema.parse(body.extracted) };
     return writeRows<Row>((store, rows, result) => {
         const item = id ? rows.find(row => row.id === id && row.kind === 'import') : undefined;
         if (id && !item) throw new Error('导入不存在');
         if (item?.state === 'saved' || (id !== null && rows.some(row => row.kind === 'job' && row.import_id === id))) throw new Error('该导入已保存，请在岗位详情中修改');
-        const record = { ...item, ...data, id: id || crypto.randomUUID(), kind: 'import', state: 'review', created_at: item?.created_at || new Date().toISOString() };
+        const record = { ...item, ...data, id: id || crypto.randomUUID(), kind: 'import', state: 'review', updated_at: new Date().toISOString(), created_at: item?.created_at || new Date().toISOString() };
         store.put(record);
         if (files !== undefined) {
             for (const row of orderedAttachments(rows, record.id)) store.delete(row.id);
@@ -50,12 +50,21 @@ export async function saveImportDraft(id: string | null, body: Record<string, un
 }
 export async function getScreenshotUrl(id: string) { const row = await get(id); if (!row?.blob)
     throw new Error('截图不存在'); return URL.createObjectURL(row.blob as Blob); }
+export async function getScreenshotFile(id: string) {
+    const row = await get(id);
+    if (!row?.blob) throw new Error('截图不存在');
+    return new File([row.blob as Blob], String(row.name), { type: String(row.mime) });
+}
 // Opening the app must not insert demo or reference jobs into a new user's library.
 export async function initializeLocalStore(): Promise<void> {}
 export async function localRequest(path: string, method = 'GET', body?: Record<string, unknown>): Promise<any> {
     const url = new URL(path, 'http://local');
     const [resource, id] = url.pathname.split('/').filter(Boolean);
     const rows = await all();
+    if (resource === 'imports' && !id && method === 'GET') {
+        return rows.filter(row => row.kind === 'import' && row.state !== 'saved' && !rows.some(job => job.kind === 'job' && job.import_id === row.id))
+            .sort((a, b) => String(b.updated_at || b.created_at).localeCompare(String(a.updated_at || a.created_at)));
+    }
     if (resource === 'jobs' && !id && method === 'GET') {
         const jobs = rows.filter(r => r.kind === 'job') as unknown as Job[];
         const p = url.searchParams;
@@ -112,6 +121,15 @@ export async function localRequest(path: string, method = 'GET', body?: Record<s
         if (!item)
             throw new Error('导入不存在');
         if (item.kind !== 'import') throw new Error('导入不存在');
+        if (method === 'DELETE') {
+            await writeRows<void>((store, current, result) => {
+                if (current.some(row => row.kind === 'job' && row.import_id === id)) throw new Error('该草稿已保存为岗位，不能丢弃');
+                store.delete(id);
+                for (const attachment of orderedAttachments(current, id)) store.delete(attachment.id);
+                result(undefined);
+            });
+            return { ok: true };
+        }
         if (method === 'PATCH') {
             const updated = { ...item, raw_text: importSchema.parse({ input_type: item.input_type, raw_text: body?.raw_text }).raw_text, extracted: fieldsSchema.parse(body?.extracted), state: item.state === 'saved' ? 'saved' : 'review' };
             await put(updated);

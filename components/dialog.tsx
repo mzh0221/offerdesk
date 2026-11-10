@@ -13,17 +13,18 @@ export default function Dialog({ children, title, onClose, wide = false, expande
     close.current = onClose;
     useEffect(() => { const previous = document.activeElement as HTMLElement; const overflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; ref.current?.focus(); function key(e: KeyboardEvent) { if (e.key === 'Escape')
         close.current(); if (e.key === 'Tab') {
-        const items = ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]');
+        const scope = ref.current?.querySelector<HTMLElement>('[role="alertdialog"]') || ref.current;
+        const items = Array.from(scope?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"], summary') || []).filter(item => item.getClientRects().length > 0);
         if (!items?.length) {
             e.preventDefault();
             return;
         }
         const first = items[0], last = items[items.length - 1];
-        if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) {
+        if (e.shiftKey && (document.activeElement === first || !scope?.contains(document.activeElement))) {
             e.preventDefault();
             last.focus();
         }
-        else if (!e.shiftKey && (document.activeElement === last || document.activeElement === ref.current)) {
+        else if (!e.shiftKey && (document.activeElement === last || !scope?.contains(document.activeElement))) {
             e.preventDefault();
             first.focus();
         }

@@ -35,6 +35,13 @@ async function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true },
   });
   window.once('ready-to-show', () => window?.show());
+  window.webContents.on('will-prevent-unload', event => {
+    const choice = dialog.showMessageBoxSync(window, {
+      type: 'question', title: '有未保存的内容', message: '当前内容尚未保存，仍要离开吗？',
+      detail: '选择“继续编辑”返回应用并保存内容。', buttons: ['继续编辑', '放弃未保存内容并离开'], defaultId: 0, cancelId: 0,
+    });
+    if (choice === 1) event.preventDefault();
+  });
   window.on('closed', () => { window = null; });
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('blob:offerdesk://app/')) {

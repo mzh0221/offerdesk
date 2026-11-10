@@ -1,0 +1,168 @@
+import { test, expect, _electron as electron, type Page } from '@playwright/test';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+async function launch(profile: string) {
+  return electron.launch({
+    ...(process.env.OFFERDESK_TEST_EXECUTABLE ? { executablePath: process.env.OFFERDESK_TEST_EXECUTABLE } : {}),
+    args: [...(process.env.OFFERDESK_TEST_EXECUTABLE ? [] : ['desktop']), `--user-data-dir=${profile}`],
+  });
+}
+async function closeCapture(page: Page) {
+  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  const keep = page.getByRole('button', { name: '保存草稿并关闭', exact: true });
+  if (await keep.isVisible()) await keep.click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
+test('原文、人工核对和手动草稿重启恢复；多草稿可选择和丢弃', async () => {
+  const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-ux-drafts-'));
+  let app = await launch(profile);
+  try {
+    let page = await app.firstWindow();
+    await page.getByRole('button', { name: '文字录入', exact: true }).click();
+    await page.getByLabel('招聘原文', { exact: true }).fill('公司：草稿科技\n岗位：前端工程师\n城市：杭州');
+    await closeCapture(page);
+    await page.getByRole('button', { name: '继续上次导入', exact: true }).click();
+    await expect(page.getByLabel('招聘原文', { exact: true })).toHaveValue(/草稿科技/);
+    await page.getByRole('button', { name: '根据文字预填', exact: true }).click();
+    await page.getByLabel(/公司名称/).fill('人工修正科技');
+    await page.getByLabel('招聘链接（选填）').fill('https://example.com/job');
+    await expect(page.getByText('草稿已保存 · 数据保存在本机', { exact: true })).toBeVisible();
+    await page.getByLabel(/公司名称/).focus();
+    await page.screenshot({ path: 'test-results/ux-review-wide.png', animations: 'disabled' });
+    await closeCapture(page);
+    await page.getByRole('button', { name: '手动录入', exact: true }).click();
+    await page.getByLabel(/公司名称/).fill('手动公司');
+    await page.getByLabel(/岗位名称/).fill('手动岗位');
+    await closeCapture(page);
+    await app.close(); app = await launch(profile); page = await app.firstWindow();
+    await page.locator('.draft-list summary').click();
+    await expect(page.locator('.draft-row')).toHaveCount(2);
+    await page.locator('.draft-row').filter({ hasText: '前端工程师' }).getByRole('button', { name: '继续编辑' }).click();
+    await expect(page.getByLabel(/公司名称/)).toHaveValue('人工修正科技');
+    await expect(page.getByLabel('招聘链接（选填）')).toHaveValue('https://example.com/job');
+    await page.getByRole('button', { name: '保存到岗位列表', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.locator('.draft-list').evaluate((el: HTMLDetailsElement) => { el.open = true; });
+    page.once('dialog', dialog => void dialog.accept());
+    await page.getByRole('button', { name: '丢弃草稿', exact: true }).click();
+    await expect(page.locator('.draft-list')).toHaveCount(0);
+    await expect(page.locator('.jobs-table tbody tr')).toHaveCount(1);
+  } finally {
+    await Promise.all([app.waitForEvent('close'), app.evaluate(({ app }) => app.exit(0)).catch(() => {})]);
+    await rm(profile, { recursive: true, force: true, maxRetries: 5 });
+  }
+});
+
+test('保存失败保留输入，详情关闭保护与最小窗口操作', async () => {
+  const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-ux-edit-'));
+  const app = await launch(profile);
+  try {
+    const page = await app.firstWindow();
+    await page.getByRole('button', { name: '手动录入', exact: true }).click();
+    await page.evaluate(() => {
+      const original = IDBObjectStore.prototype.put;
+      (window as any).__put = original;
+      IDBObjectStore.prototype.put = function () { throw new Error('模拟磁盘写入失败'); };
+    });
+    await page.getByLabel(/公司名称/).fill('保护测试公司');
+    await page.getByLabel(/岗位名称/).fill('保护测试岗位');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: '保存草稿并关闭' }).click();
+    await expect(page.getByRole('alert')).toContainText('模拟磁盘写入失败');
+    await expect(page.getByLabel(/公司名称/)).toHaveValue('保护测试公司');
+    await page.evaluate(() => { IDBObjectStore.prototype.put = (window as any).__put; });
+    await page.getByRole('button', { name: '继续编辑', exact: true }).click();
+    await page.getByRole('button', { name: '保存到岗位列表', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.locator('.jobs-table .job-title-button').click();
+    await expect(page.getByRole('button', { name: '保存修改', exact: true })).toBeDisabled();
+    await page.getByLabel('个人备注').fill('明天下午面试');
+    await app.evaluate(({ dialog, BrowserWindow }) => {
+      (globalThis as any).__unloadPrompts = 0;
+      dialog.showMessageBoxSync = (() => { (globalThis as any).__unloadPrompts++; return 0; }) as typeof dialog.showMessageBoxSync;
+      BrowserWindow.getAllWindows()[0].webContents.reload();
+    });
+    await expect.poll(() => app.evaluate(() => (globalThis as any).__unloadPrompts)).toBe(1);
+    await expect(page.getByLabel('个人备注')).toHaveValue('明天下午面试');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('alertdialog', { name: '未保存修改' })).toBeVisible();
+    await page.getByRole('button', { name: '继续编辑', exact: true }).click();
+    await expect(page.getByLabel('个人备注')).toHaveValue('明天下午面试');
+    await page.getByRole('button', { name: '关闭', exact: true }).click();
+    await page.getByRole('button', { name: '保存并关闭', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.locator('.jobs-table .job-title-button').click();
+    await expect(page.getByLabel('个人备注')).toHaveValue('明天下午面试');
+    await page.getByLabel('当前状态').selectOption('面试');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: '放弃修改', exact: true }).click();
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(760, 560));
+    await expect(page.locator('.mobile-jobs')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator('.mobile-jobs select').selectOption('已投递');
+    await expect(page.getByRole('status')).toContainText('投递状态已更新');
+    await page.locator('.mobile-job-heading').click();
+    await expect(page.getByLabel('当前状态')).toHaveValue('已投递');
+    await page.screenshot({ path: 'test-results/ux-detail-small.png', animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: '手动录入', exact: true }).click();
+    await page.getByLabel(/公司名称/).fill('小窗口公司');
+    await page.getByLabel(/岗位名称/).fill('小窗口岗位');
+    const save = page.getByRole('button', { name: '保存到岗位列表', exact: true });
+    await expect(save).toBeInViewport();
+    await page.screenshot({ path: 'test-results/ux-form-small.png', animations: 'disabled' });
+    await save.click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  } finally {
+    await Promise.all([app.waitForEvent('close'), app.evaluate(({ app }) => app.exit(0)).catch(() => {})]);
+    await rm(profile, { recursive: true, force: true, maxRetries: 5 });
+  }
+});
+
+test('恢复截图可移除、排序和补充；丢弃只删除关联草稿', async () => {
+  const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-ux-images-'));
+  const app = await launch(profile);
+  try {
+    const page = await app.firstWindow();
+    const buffer = await readFile('desktop/resources/icon.png');
+    await page.locator('.screenshot-action').click();
+    await page.locator('input[type=file]').setInputFiles(['first.png', 'second.png'].map(name => ({ name, mimeType: 'image/png', buffer })));
+    await page.getByRole('button', { name: '手动填写', exact: true }).click();
+    await closeCapture(page);
+    await page.getByRole('button', { name: '继续上次导入' }).click();
+    await page.getByRole('button', { name: '返回', exact: true }).click();
+    await page.getByRole('button', { name: '前移截图', exact: true }).nth(1).click();
+    await expect(page.locator('.upload-preview > div > span')).toHaveText(['1. second.png', '2. first.png']);
+    await page.getByRole('button', { name: '移除截图', exact: true }).nth(1).click();
+    await expect(page.locator('.upload-preview')).toHaveCount(1);
+    await expect(page.locator('input[type=file]')).toBeEnabled();
+    await page.locator('input[type=file]').setInputFiles({ name: 'third.png', mimeType: 'image/png', buffer });
+    await expect(page.locator('.upload-preview > div > span')).toHaveText(['1. second.png', '2. third.png']);
+    await closeCapture(page);
+    await page.locator('.draft-list').evaluate((el: HTMLDetailsElement) => { el.open = true; });
+    page.once('dialog', dialog => void dialog.accept());
+    await page.getByRole('button', { name: '丢弃草稿', exact: true }).click();
+    await expect(page.locator('.draft-list')).toHaveCount(0);
+    const count = await page.evaluate(() => new Promise<number>(resolve => { const r = indexedDB.open('offerdesk-local-v1', 1); r.onsuccess = () => { const db = r.result; const q = db.transaction('records').objectStore('records').getAll(); q.onsuccess = () => { resolve(q.result.length); db.close(); }; }; }));
+    expect(count).toBe(0);
+    // A draft from the old format has no step, source_url or additional_text.
+    await page.evaluate(() => new Promise<void>(resolve => {
+      const r = indexedDB.open('offerdesk-local-v1', 1);
+      r.onsuccess = () => {
+        const db = r.result; const tx = db.transaction('records', 'readwrite');
+        tx.objectStore('records').put({ id: crypto.randomUUID(), kind: 'import', state: 'uploaded', input_type: 'text', raw_text: '旧版未完成原文', extracted: null, created_at: '2026-01-01T00:00:00Z' });
+        tx.oncomplete = () => { db.close(); resolve(); };
+      };
+    }));
+    await page.reload();
+    await page.getByRole('button', { name: '继续上次导入', exact: true }).click();
+    await expect(page.getByLabel('招聘原文', { exact: true })).toHaveValue('旧版未完成原文');
+    await closeCapture(page);
+  } finally {
+    await Promise.all([app.waitForEvent('close'), app.evaluate(({ app }) => app.exit(0)).catch(() => {})]);
+    await rm(profile, { recursive: true, force: true, maxRetries: 5 });
+  }
+});

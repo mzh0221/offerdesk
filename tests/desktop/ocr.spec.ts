@@ -59,9 +59,12 @@ test('全新环境离线 OCR、编辑预填、原文保存与重启', async () =
         return bitmap;
       }) as typeof createImageBitmap;
     });
-    await page.getByRole('button', { name: '重试未完成截图', exact: true }).click();
-    await expect(page.getByLabel('重试新增文字（请复制需要的内容到识别原文）')).toHaveValue(/Software Engineer/, { timeout: 120000 });
+    await page.getByRole('button', { name: '重试此图', exact: true }).click();
+    await expect(page.getByLabel('重试新增文字')).toHaveValue(/Software Engineer/, { timeout: 120000 });
     await expect(raw).toHaveValue(corrected);
+    await page.getByRole('button', { name: '插入原文', exact: true }).click();
+    await expect(raw).toHaveValue(/人工核对后纠正的招聘信息[\s\S]*Software Engineer/);
+    await expect(page.getByLabel('重试新增文字')).toHaveCount(0);
     await page.evaluate(() => { window.createImageBitmap = (window as any).__originalBitmap; });
     await raw.fill('公司名称：离线识别测试\n岗位名称：开发实习生\n城市：杭州\n薪资：200元/天\n任职要求：\nTypeScript React');
     await page.getByRole('button', { name: '根据文字预填', exact: true }).click();
