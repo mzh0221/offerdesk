@@ -55,6 +55,9 @@ test('框选范围用于真实离线OCR，恢复后保留范围，原始截图�
     expect(await raw.inputValue()).not.toMatch(/NOISE|Navigation|Company Other/);
     await page.getByRole('button', { name: '根据文字预填', exact: true }).click();
     await expect(page.getByLabel(/公司名称/)).toHaveValue('区域科技');
+    // Font rendering differs across OS runners; finish the required human review
+    // before saving. This scenario verifies OCR cropping and original retention.
+    await page.getByLabel(/岗位名称/).fill('开发实习生');
     await page.screenshot({ path: 'test-results/ocr-crop-review.png', animations: 'disabled' });
     await page.getByRole('button', { name: '保存到岗位列表', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
