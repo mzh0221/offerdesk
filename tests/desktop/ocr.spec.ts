@@ -79,7 +79,7 @@ test('全新环境离线 OCR、编辑预填、原文保存与重启', async () =
     app = await launch(); page = await app.firstWindow();
     await page.getByLabel('搜索公司、岗位或技能').fill('离线识别测试');
     await expect(page.locator('.jobs-table tbody tr')).toHaveCount(1);
-    await page.locator('.job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     await page.getByText('原始招聘信息', { exact: false }).click();
     await expect(page.locator('pre')).toContainText('薪资：200元/天');
     await expect(page.getByRole('img', { name: 'ocr.webp', exact: true })).toBeVisible();

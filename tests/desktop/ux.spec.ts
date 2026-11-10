@@ -77,7 +77,7 @@ test('保存失败保留输入，详情关闭保护与最小窗口操作', async
     await page.getByRole('button', { name: '继续编辑', exact: true }).click();
     await page.getByRole('button', { name: '保存到岗位列表', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.locator('.jobs-table .job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     await expect(page.getByRole('button', { name: '保存修改', exact: true })).toBeDisabled();
     await page.getByLabel('个人备注').fill('明天下午面试');
     await app.evaluate(({ dialog, BrowserWindow }) => {
@@ -94,7 +94,7 @@ test('保存失败保留输入，详情关闭保护与最小窗口操作', async
     await page.getByRole('button', { name: '关闭', exact: true }).click();
     await page.getByRole('button', { name: '保存并关闭', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.locator('.jobs-table .job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     await expect(page.getByLabel('个人备注')).toHaveValue('明天下午面试');
     await page.getByLabel('当前状态').selectOption('面试');
     await page.keyboard.press('Escape');

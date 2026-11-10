@@ -39,7 +39,7 @@ test('安装包界面离线运行，岗位、投递记录和截图在完整重�
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.getByLabel('搜索公司、岗位或技能').fill('桌面持久化测试岗位');
     await expect(page.locator('.jobs-table tbody tr')).toHaveCount(1);
-    await page.locator('.jobs-table .job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     await page.getByLabel('当前状态').selectOption('已投递');
     await page.getByLabel('个人备注').fill('重启后应保留的备注');
     await page.getByRole('button', { name: '保存修改', exact: true }).click();
@@ -62,7 +62,7 @@ test('安装包界面离线运行，岗位、投递记录和截图在完整重�
     page.on('pageerror', error => errors.push(error.message));
     await page.getByLabel('搜索公司、岗位或技能').fill('桌面持久化测试岗位');
     await expect(page.locator('.jobs-table tbody tr')).toHaveCount(1);
-    await page.locator('.jobs-table .job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     await expect(page.getByLabel('当前状态')).toHaveValue('已投递');
     await expect(page.getByLabel('个人备注')).toHaveValue('重启后应保留的备注');
     await expect(page.getByLabel('投递日期')).not.toHaveValue('');

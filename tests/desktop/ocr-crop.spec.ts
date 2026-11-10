@@ -58,7 +58,7 @@ test('框选范围用于真实离线OCR，恢复后保留范围，原始截图�
     await page.screenshot({ path: 'test-results/ocr-crop-review.png', animations: 'disabled' });
     await page.getByRole('button', { name: '保存到岗位列表', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.locator('.job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     await page.getByText('原始招聘信息', { exact: false }).click();
     const img = page.getByRole('img', { name: 'crop-original.png', exact: true });
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(1700);

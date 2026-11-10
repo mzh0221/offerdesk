@@ -21,7 +21,7 @@ test('网页OCR空格与导航不阻碍品牌和标题预填，保存后保留�
     await expect(page.getByLabel('薪资原文', { exact: true })).toHaveValue('');
     await page.getByRole('button', { name: '保存到岗位列表', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.locator('.job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     await page.getByText('原始招聘信息', { exact: false }).click();
     await expect(page.locator('pre')).toHaveText(raw);
   } finally {
@@ -74,7 +74,7 @@ test('无标签手机版式预填、核对修改、保存与重启保留原文',
     await app!.close(); app = undefined;
     page = await launch();
     await page.getByLabel('搜索公司、岗位或技能').fill('表单测试科技');
-    await page.locator('.job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     await page.getByRole('button', { name: '编辑信息', exact: true }).click();
     await expect(page.getByLabel('工作地点', { exact: true })).toHaveValue('杭州/上海');
     await expect(page.getByLabel('技能标签', { exact: true })).toHaveValue('TypeScript,React');

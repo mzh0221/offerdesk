@@ -65,7 +65,7 @@ test('替换和删除截图立即清理草稿；写入中断回滚；删除岗�
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.getByLabel('搜索公司、岗位或技能').fill('完整性测试岗位');
     await expect(page.locator('.jobs-table tbody tr')).toHaveCount(1);
-    await page.locator('.job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     // Force a failure after the job deletion is queued, to verify deletion is atomic.
     await page.evaluate(() => {
       const original = IDBObjectStore.prototype.delete;
@@ -113,7 +113,7 @@ test('随机附件ID不影响恢复导入、重启后详情中的截图顺序', 
     await app.close(); app = await launch(profile); page = await app.firstWindow();
     await page.getByLabel('搜索公司、岗位或技能').fill('排序测试岗位');
     await expect(page.locator('.jobs-table tbody tr')).toHaveCount(1);
-    await page.locator('.job-title-button').click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
     await page.getByText('原始招聘信息', { exact: false }).click();
     await expect(page.locator('.source-image figcaption')).toHaveText(['first.png', 'second.png', 'third.png']);
   } finally { await app.close(); await rm(profile, { recursive: true, force: true }); }
