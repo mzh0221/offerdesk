@@ -17,4 +17,20 @@ npm run desktop:test
 
 当前不扩展云服务、网页账户、备份恢复或签名流程。PR 说明实际用户可见变化与已完成检查，未运行的平台验证不能写成通过。
 
-不提交个人岗位、截图、密钥、依赖或安装包。源码采用 [MIT 许可证](LICENSE)，第三方组件保留原许可，初始岗位来源见 [岗位资料](docs/reference-jobs.md)。
+不提交个人岗位、截图、密钥、依赖或安装包。源码采用 [MIT 许可证](LICENSE)，第三方组件保留原许可。
+
+## 目录说明
+
+| 目录 | 内容 |
+|---|---|
+| `desktop/` | 桌面进程、页面入口、MCP 接入与图标 |
+| `components/` | React 交互界面 |
+| `lib/` | 领域规则、OCR 解析与本地数据逻辑 |
+| `tests/` | 单元测试与桌面回归测试 |
+| `scripts/` | 构建资源准备脚本 |
+| `docs/` | 当前需求、导入指南与构建说明 |
+| `docs/archive/` | 历史检查与验证记录 |
+
+`release/`、`test-results/`、`desktop/renderer-dist/`、`desktop/ocr-runtime/` 和 `*.tsbuildinfo` 均为可重新生成的本地产物，不提交 Git。`npm start` 会重新准备 OCR 资源并构建页面。
+
+`local-data/` 和 `pngs/` 是忽略提交的本机资料目录，可能包含个人岗位与原始截图，不作为普通构建缓存删除。

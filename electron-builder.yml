@@ -10,6 +10,9 @@ files:
   - preload.cjs
   - ocr.cjs
   - ocr-process.cjs
+  - import-bridge.cjs
+  - mcp-stdio.cjs
+  - harness-config.cjs
   - package.json
   - renderer-dist/**/*
   - '!node_modules/**/*'

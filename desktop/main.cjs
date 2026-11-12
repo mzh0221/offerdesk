@@ -5,6 +5,16 @@ const { pathToFileURL } = require('node:url');
 const { APP_URL, isAppUrl, externalUrl, resolveAsset } = require('./policy.cjs');
 
 app.setName('OfferDesk');
+if (process.argv.includes('--offerdesk-mcp')) {
+  const directory = process.argv.find(value => value.startsWith('--user-data-dir='))?.slice('--user-data-dir='.length);
+  require('./mcp-stdio.cjs').start(directory, () => app.quit());
+} else if (process.argv.includes('--offerdesk-import')) {
+  const directory = process.argv.find(value => value.startsWith('--user-data-dir='))?.slice('--user-data-dir='.length);
+  const filename = process.argv[process.argv.indexOf('--offerdesk-import') + 1];
+  require('./mcp-stdio.cjs').importFile(filename, directory).then(result => {
+    process.stdout.write(JSON.stringify(result) + '\n', () => app.exit(0));
+  }).catch(error => { process.stderr.write(error.message + '\n', () => app.exit(1)); });
+} else {
 // Keep the application's profile and origin stable across upgrades and installers.
 const profile = process.argv.find(value => value.startsWith('--user-data-dir='));
 if (profile) {
@@ -112,7 +122,13 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.on('will-download', (_event, item) => {
       if (!item.getURL().startsWith('blob:offerdesk://app/')) item.cancel();
     });
+    require('electron').ipcMain.handle('external-import:configs', event => {
+      if (event.sender !== window?.webContents || event.senderFrame !== event.sender.mainFrame || event.senderFrame.url !== APP_URL) throw new Error('未授权请求');
+      const args = [...(app.isPackaged ? [] : [app.getAppPath()]), '--offerdesk-mcp', ...(profile ? [profile] : [])];
+      return require('./harness-config.cjs').harnessConfigs(process.execPath, args);
+    });
     require('./ocr.cjs').registerOcr(() => window);
+    require('./import-bridge.cjs').registerImportBridge(app, require('electron').ipcMain, () => window);
     menu();
     await createWindow();
     app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) void createWindow(); });
@@ -121,4 +137,6 @@ if (!app.requestSingleInstanceLock()) {
     app.quit();
   });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+}
+
 }

@@ -8,3 +8,14 @@ contextBridge.exposeInMainWorld('localOcr', {
     return () => ipcRenderer.removeListener('ocr:progress', listener);
   },
 });
+
+contextBridge.exposeInMainWorld('externalImports', {
+  configs: () => ipcRenderer.invoke('external-import:configs'),
+  listen: callback => {
+    const listener = (_event, id, body) => callback(id, body);
+    ipcRenderer.on('external-import:request', listener);
+    ipcRenderer.send('external-import:ready');
+    return () => ipcRenderer.removeListener('external-import:request', listener);
+  },
+  respond: (id, response) => ipcRenderer.send('external-import:result', id, response),
+});

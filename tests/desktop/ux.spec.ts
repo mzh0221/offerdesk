@@ -2,6 +2,7 @@ import { test, expect, _electron as electron, type Page } from '@playwright/test
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { addLegacyTextDraft } from './legacy-draft';
 
 async function launch(profile: string) {
   return electron.launch({
@@ -21,12 +22,14 @@ test('原文、人工核对和手动草稿重启恢复；多草稿可选择和�
   let app = await launch(profile);
   try {
     let page = await app.firstWindow();
-    await page.getByRole('button', { name: '文字录入', exact: true }).click();
-    await page.getByLabel('招聘原文', { exact: true }).fill('公司：草稿科技\n岗位：前端工程师\n城市：杭州');
+    await expect(page.getByRole('button', { name: '文字录入', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '粘贴招聘文字', exact: true })).toHaveCount(0);
+    await addLegacyTextDraft(page, '公司：草稿科技\n岗位：前端工程师\n城市：杭州');
+    await page.getByRole('button', { name: '继续上次导入', exact: true }).click();
     await closeCapture(page);
     await page.getByRole('button', { name: '继续上次导入', exact: true }).click();
-    await expect(page.getByLabel('招聘原文', { exact: true })).toHaveValue(/草稿科技/);
-    await page.getByRole('button', { name: '根据文字预填', exact: true }).click();
+    await expect(page.locator('.review-source pre')).toContainText('草稿科技');
+    await expect(page.getByRole('button', { name: '返回', exact: true })).toHaveCount(0);
     await page.getByLabel(/公司名称/).fill('人工修正科技');
     await page.getByLabel('招聘链接（选填）').fill('https://example.com/job');
     await expect(page.getByText('草稿已保存 · 数据保存在本机', { exact: true })).toBeVisible();
@@ -129,6 +132,7 @@ test('恢复截图可移除、排序和补充；丢弃只删除关联草稿', as
     const page = await app.firstWindow();
     const buffer = await readFile('desktop/resources/icon.png');
     await page.locator('.screenshot-action').click();
+    await expect(page.getByRole('button', { name: '粘贴文字', exact: true })).toHaveCount(0);
     await page.locator('input[type=file]').setInputFiles(['first.png', 'second.png'].map(name => ({ name, mimeType: 'image/png', buffer })));
     await page.getByRole('button', { name: '手动填写', exact: true }).click();
     await closeCapture(page);
@@ -159,7 +163,8 @@ test('恢复截图可移除、排序和补充；丢弃只删除关联草稿', as
     }));
     await page.reload();
     await page.getByRole('button', { name: '继续上次导入', exact: true }).click();
-    await expect(page.getByLabel('招聘原文', { exact: true })).toHaveValue('旧版未完成原文');
+    await expect(page.locator('.review-source pre')).toHaveText('旧版未完成原文');
+    await expect(page.getByLabel('招聘原文', { exact: true })).toHaveCount(0);
     await closeCapture(page);
   } finally {
     await Promise.all([app.waitForEvent('close'), app.evaluate(({ app }) => app.exit(0)).catch(() => {})]);

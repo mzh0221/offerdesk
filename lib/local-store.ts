@@ -1,3 +1,4 @@
+import { externalBatchSchema, externalJobSchema, normalizeSourceUrl, type ExternalImportResult } from './external-import';
 import { filterJobs, nextAppliedDate, type Job } from './domain';
 import { fieldsSchema, importSchema, draftSchema, jobSchema } from './schema';
 type Row = {
@@ -10,7 +11,6 @@ async function records<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore)
 const all = () => records<Row[]>('readonly', s => s.getAll());
 const put = (row: unknown) => records('readwrite', s => s.put(row));
 const get = (id: string) => records<Row | undefined>('readonly', s => s.get(id));
-const del = (id: string) => records('readwrite', s => s.delete(id));
 // All related rows commit together; a failed write leaves the previous draft intact.
 async function writeRows<T>(run: (store: IDBObjectStore, rows: Row[], result: (value: T) => void) => void): Promise<T> {
     const db = await database();
@@ -77,7 +77,8 @@ export async function localRequest(path: string, method = 'GET', body?: Record<s
         if (existing)
             return existing;
         const now = new Date().toISOString();
-        const job = { ...jobSchema.parse(body), id: body?.import_id ? `job-${body.import_id}` : crypto.randomUUID(), kind: 'job', created_at: now, updated_at: now, applied_at: nextAppliedDate(body?.applied_at as string | null, body?.status as Job['status']) };
+        const imported = body?.import_id ? rows.find(row => row.id === body.import_id) : undefined;
+        const job = { external_key: imported?.external_key, ...jobSchema.parse(body), id: body?.import_id ? `job-${body.import_id}` : crypto.randomUUID(), kind: 'job', created_at: now, updated_at: now, applied_at: nextAppliedDate(body?.applied_at as string | null, body?.status as Job['status']) };
         await put(job);
         if (body?.import_id) {
             const item = await get(body.import_id as string);
@@ -138,4 +139,47 @@ export async function localRequest(path: string, method = 'GET', body?: Record<s
         return { ...item, attachments: orderedAttachments(rows, id) };
     }
     throw new Error('未找到记录');
+}
+
+// Validation precedes a single transaction so concurrent clients cannot create duplicates.
+export async function importExternalJobs(body: unknown) {
+    const batch = externalBatchSchema.parse(body);
+    const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(batch))))).map(b => b.toString(16).padStart(2, '0')).join('');
+    const parsed = batch.jobs.map(item => externalJobSchema.safeParse(item));
+    return writeRows<{ batch_id: string; results: ExternalImportResult[] }>((store, rows, result) => {
+        const receipt = rows.find(row => row.kind === 'external-batch' && row.batch_id === batch.batch_id);
+        if (receipt) {
+            if (receipt.fingerprint !== fingerprint) throw new Error('批次标识已使用，重试必须保持内容一致；新内容请使用新批次标识');
+            result(receipt.response as { batch_id: string; results: ExternalImportResult[] }); return;
+        }
+        const results: ExternalImportResult[] = [];
+        parsed.forEach((parsedJob, index) => {
+            if (!parsedJob.success) {
+                results.push({ index, status: 'invalid', error: parsedJob.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ') });
+                return;
+            }
+            const job = parsedJob.data;
+            const key = normalizeSourceUrl(job.source_url);
+            const existing = rows.find(row => {
+                if (row.kind !== 'job' && row.kind !== 'import') return false;
+                if (row.external_key === key) return true;
+                if (typeof row.source_url !== 'string' || !row.source_url) return false;
+                try { return normalizeSourceUrl(row.source_url) === key; } catch { return false; }
+            });
+            if (existing) {
+                results.push({ index, status: 'duplicate', record_id: existing.id, ...(existing.kind === 'import' && existing.state !== 'saved' ? { draft_id: existing.id } : {}) });
+                return;
+            }
+            const now = new Date().toISOString();
+            const row: Row = { id: crypto.randomUUID(), kind: 'import', input_type: 'text', state: 'review', step: 'review',
+                raw_text: job.raw_text, source_url: job.source_url, extracted: job.fields,
+                external_source: job.source, external_batch_id: batch.batch_id, external_key: key,
+                created_at: now, updated_at: now };
+            store.put(row); rows.push(row);
+            results.push({ index, status: 'created', draft_id: row.id });
+        });
+        const response = { batch_id: batch.batch_id, results };
+        store.put({ id: crypto.randomUUID(), kind: 'external-batch', batch_id: batch.batch_id, fingerprint, response });
+        result(response);
+    });
 }

@@ -20,7 +20,7 @@ Electron 加载 Vite 编译的 React 页面，所有岗位和截图通过本地 
 - Windows：`%APPDATA%/OfferDesk/`
 - IndexedDB：`offerdesk-local-v1`，对象仓库 `records`。
 
-应用数据位于源码目录之外，清理源码与构建目录不会删除岗位记录。Windows 卸载器配置为默认保留用户数据。导出/导入、跨设备同步不属于当前功能。
+应用数据位于源码目录之外，清理源码与构建目录不会删除岗位记录。Windows 卸载器配置为默认保留用户数据。支持通过 MCP、JSON 文件与本机 CLI 导入岗位，见 [导入指南](import.md)；数据备份恢复与跨设备同步不属于当前功能。
 
 ## 开发与构建
 

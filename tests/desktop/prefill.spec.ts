@@ -2,8 +2,9 @@ import { test, expect, _electron as electron, type ElectronApplication } from '@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { addLegacyTextDraft } from './legacy-draft';
 
-test('网页OCR空格与导航不阻碍品牌和标题预填，保存后保留原始文字', async () => {
+test('旧文字草稿恢复：网页OCR空格与导航不阻碍品牌和标题预填，保存后保留原始文字', async () => {
   const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-web-prefill-'));
   const app = await electron.launch({
     ...(process.env.OFFERDESK_TEST_EXECUTABLE ? { executablePath: process.env.OFFERDESK_TEST_EXECUTABLE } : {}),
@@ -12,9 +13,9 @@ test('网页OCR空格与导航不阻碍品牌和标题预填，保存后保留�
   const raw = '首页 岗位聚合 投递工作台 简历中心 登录\n岗位 聚合 / AI 应用 研发 实习 生 (Agent 方向)\n阿里 健康\n[]\nAI 应用 研发 实习 生 (Agent 方向)\n杭州 校招 2026/10/30\n岗位职责\n参与 Agent 服务开发\n任职要求\n掌 握 Java 和 Spring Boot，了解 RAG 和 MCP';
   try {
     const page = await app.firstWindow();
-    await page.getByRole('button', { name: '文字录入', exact: true }).click();
-    await page.getByLabel('招聘原文', { exact: true }).fill(raw);
-    await page.getByRole('button', { name: '根据文字预填', exact: true }).click();
+    await addLegacyTextDraft(page, raw);
+    await page.getByRole('button', { name: '继续上次导入', exact: true }).click();
+    await expect(page.getByRole('button', { name: '返回', exact: true })).toHaveCount(0);
     await expect(page.getByLabel(/公司名称/)).toHaveValue('阿里健康');
     await expect(page.getByLabel(/岗位名称/)).toHaveValue('AI 应用研发实习生(Agent 方向)');
     await expect(page.getByRole('combobox', { name: /^岗位类型/ })).toHaveValue('实习');
@@ -30,7 +31,7 @@ test('网页OCR空格与导航不阻碍品牌和标题预填，保存后保留�
   }
 });
 
-test('无标签手机版式预填、核对修改、保存与重启保留原文', async () => {
+test('旧文字草稿恢复：无标签手机版式预填、核对修改、保存与重启保留原文', async () => {
   const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-prefill-'));
   let app: ElectronApplication | undefined;
   const launch = async () => {
@@ -56,9 +57,9 @@ test('无标签手机版式预填、核对修改、保存与重启保留原文',
 北京公司为全国客户提供服务`;
   try {
     let page = await launch();
-    await page.getByRole('button', { name: '文字录入', exact: true }).click();
-    await page.getByLabel('招聘原文', { exact: true }).fill(raw);
-    await page.getByRole('button', { name: '根据文字预填', exact: true }).click();
+    await addLegacyTextDraft(page, raw);
+    await page.getByRole('button', { name: '继续上次导入', exact: true }).click();
+    await expect(page.getByRole('button', { name: '返回', exact: true })).toHaveCount(0);
     await expect(page.getByLabel(/公司名称/)).toHaveValue('表单测试科技有限公司');
     await expect(page.getByLabel(/岗位名称/)).toHaveValue('前端开发实习生');
     await expect(page.getByLabel('工作地点', { exact: true })).toHaveValue('杭州');
