@@ -19,6 +19,11 @@ function mcp(profile: string, launchConfig?: { command: string; args: string[] }
     pending.set(id, value => { clearTimeout(timer); resolve(value); }); child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
   }); } };
 }
+async function stopMcp(child: ChildProcessWithoutNullStreams) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise(resolve => child.once('exit', resolve));
+  child.kill(); await exited;
+}
 const launch = (profile: string) => electron.launch({
   ...(process.env.OFFERDESK_TEST_EXECUTABLE ? { executablePath: process.env.OFFERDESK_TEST_EXECUTABLE } : {}),
   args: [...(process.env.OFFERDESK_TEST_EXECUTABLE ? [] : ['desktop']), `--user-data-dir=${profile}`],
@@ -85,7 +90,7 @@ test('MCP采集导入、校验、并发去重、重试、核对保存与重启',
     expect(result(await call({ batch_id: 'after-save', jobs: [job] })).results[0].status).toBe('duplicate');
     await app.close(); app = undefined;
     expect((await call({ batch_id: 'closed', jobs: [job] })).result.isError).toBe(true);
-  } finally { const exited = new Promise(resolve => client.child.once('exit', resolve)); client.child.kill(); await exited; if (app) await app.close(); await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+  } finally { await stopMcp(client.child); if (app) await app.close(); await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
 test('通用接入配置、JSON文件及CLI导入共用草稿校验', async () => {
@@ -146,7 +151,7 @@ test('WorkBuddy、DSH、ZCode生成配置可连接导入；豆包提供文件提
         const imported = result(await client.call('tools/call', { name: 'import_jobs', arguments: { batch_id: id, jobs: [{ ...job, source_url: 'https://example.com/jobs?id=' + id }] } }));
         expect(imported.results[0].status).toBe('created');
       } finally {
-        const exited = new Promise(resolve => client.child.once('exit', resolve)); client.child.kill(); await exited;
+        await stopMcp(client.child);
       }
     }
     await page.getByLabel('选择 AI 工具').selectOption('doubao-work');

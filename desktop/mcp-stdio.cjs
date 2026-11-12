@@ -39,7 +39,14 @@ function defaultDirectory() {
     : process.platform === 'win32' ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'OfferDesk')
     : path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'OfferDesk');
 }
+// Electron's browser-process stdin wrapper ends without reading piped bytes on
+// Windows. Read the inherited descriptor directly, leaving ownership to the host.
+function inputStream() {
+  return process.platform === 'win32' && process.versions.electron
+    ? fs.createReadStream(null, { fd: 0, autoClose: false }) : process.stdin;
+}
 function start(directory = defaultDirectory(), onClose = () => {}) {
+  const input = inputStream();
   const send = value => process.stdout.write(JSON.stringify(value) + '\n');
   async function handle(request) {
     if (!request || request.jsonrpc !== '2.0' || typeof request.method !== 'string') { send({ jsonrpc: '2.0', id: request?.id ?? null, error: { code: -32600, message: 'Invalid Request' } }); return; }
@@ -63,10 +70,10 @@ function start(directory = defaultDirectory(), onClose = () => {}) {
     send({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'Method not found' } });
   }
   let buffer = '';
-  process.stdin.setEncoding('utf8');
-  process.stdin.on('data', chunk => {
+  input.setEncoding('utf8');
+  input.on('data', chunk => {
     buffer += chunk;
-    if (Buffer.byteLength(buffer) > MAX_BYTES && !buffer.includes('\n')) { process.stderr.write('MCP input exceeds 4MB\n'); process.exitCode = 1; process.stdin.destroy(); onClose(); return; }
+    if (Buffer.byteLength(buffer) > MAX_BYTES && !buffer.includes('\n')) { process.stderr.write('MCP input exceeds 4MB\n'); process.exitCode = 1; input.destroy(); onClose(); return; }
     let boundary;
     while ((boundary = buffer.indexOf('\n')) !== -1) {
       const line = buffer.slice(0, boundary); buffer = buffer.slice(boundary + 1);
@@ -76,15 +83,17 @@ function start(directory = defaultDirectory(), onClose = () => {}) {
       catch { send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }); }
     }
   });
-  process.stdin.on('end', onClose);
+  input.on('error', error => { process.stderr.write(error.message + '\n'); process.exitCode = 1; onClose(); });
+  input.on('end', onClose);
 }
 async function importFile(filename, directory = defaultDirectory()) {
   if (!filename || filename.startsWith('--')) throw new Error('用法：OfferDesk --offerdesk-import <JSON文件绝对路径或 ->');
   let text = '';
   if (filename === '-') {
     let size = 0;
-    process.stdin.setEncoding('utf8');
-    for await (const chunk of process.stdin) {
+    const input = inputStream();
+    input.setEncoding('utf8');
+    for await (const chunk of input) {
       size += Buffer.byteLength(chunk);
       if (size > MAX_BYTES) throw new Error('文件超过4MB');
       text += chunk;

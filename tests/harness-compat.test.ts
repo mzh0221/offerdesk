@@ -21,8 +21,9 @@ test('不同客户端配置保留包含中文、空格和Windows反斜线的命�
         assert.deepEqual(JSON.parse(codex.split('\n')[2].slice('args = '.length)), args);
     }
 });
-test('MCP客户端版本协商、空目录探测、分片消息及标准错误', async () => {
-    const child = spawn(process.execPath, ['-e', "require('./desktop/mcp-stdio.cjs').start(undefined, () => process.exit(0))"]);
+for (const directDescriptor of [false, true]) test(`MCP版本协商、目录探测与分片消息（${directDescriptor ? 'Windows描述符兼容分支' : '标准输入流'}）`, async () => {
+    const setup = directDescriptor ? "Object.defineProperty(process, 'platform', { value: 'win32' }); process.versions.electron = 'test';" : '';
+    const child = spawn(process.execPath, ['-e', setup + "require('./desktop/mcp-stdio.cjs').start(undefined, () => process.exit(0))"]);
     const lines = createInterface({ input: child.stdout });
     const pending = new Map<number | null, (value: any) => void>(); let sequence = 0;
     lines.on('line', line => { const value = JSON.parse(line); pending.get(value.id)?.(value); });
