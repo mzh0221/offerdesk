@@ -1,4 +1,4 @@
-# OfferDesk v1.5.0：更直观的 AI 接入与岗位信息补全
+# OfferDesk v1.5.1：更直观的 AI 接入与岗位信息补全
 
 本版重新设计“AI 采集与导入”，减少配置时需要理解的参数与状态；同时修复招聘原文已有要求、导入后却显示空白的问题。已有岗位、草稿、截图和投递记录继续保存在本机。
 
@@ -17,7 +17,7 @@
 - 自动检测为只读操作；快速切换工具时会忽略旧检测结果，避免串用其他客户端的配置。
 - 写入继续保留其他服务器和模型设置；检测后配置发生变化时停止写入，需重新检测。
 
-自动配置适用范围与 v1.4.0 一致：Codex 需要可直接运行的官方 CLI；Claude、WorkBuddy、ZCode 使用对应用户配置；OpenCode 优先使用官方 CLI；DSH 需要在目标会话中加载补丁。模板不代表所有客户端版本均已逐一安装实测。完整说明见 [MCP 配置指南](https://github.com/mzh0221/offerdesk/blob/v1.5.0/docs/import.md)。
+自动配置适用范围与 v1.4.0 一致：Codex 需要可直接运行的官方 CLI；Claude、WorkBuddy、ZCode 使用对应用户配置；OpenCode 优先使用官方 CLI；DSH 需要在目标会话中加载补丁。模板不代表所有客户端版本均已逐一安装实测。完整说明见 [MCP 配置指南](https://github.com/mzh0221/offerdesk/blob/v1.5.1/docs/import.md)。
 
 ## 服务自检不再占用正常接入流程
 
@@ -53,9 +53,9 @@
 
 | 系统 | 安装包 |
 |---|---|
-| Mac，Apple M 系列芯片 | `OfferDesk-1.5.0-mac-arm64.dmg` |
-| Mac，Intel 处理器 | `OfferDesk-1.5.0-mac-x64.dmg` |
-| Windows，Intel / AMD 64 位处理器 | `OfferDesk-1.5.0-win-x64.exe` |
+| Mac，Apple M 系列芯片 | `OfferDesk-1.5.1-mac-arm64.dmg` |
+| Mac，Intel 处理器 | `OfferDesk-1.5.1-mac-x64.dmg` |
+| Windows，Intel / AMD 64 位处理器 | `OfferDesk-1.5.1-win-x64.exe` |
 
 Mac 另提供 ZIP，`SHA256SUMS.txt` 用于核对文件完整性。安装包由对应系统的 GitHub Actions runner 构建，包含单元测试、类型检查、桌面测试、打包后应用验证和发布文件校验。
 

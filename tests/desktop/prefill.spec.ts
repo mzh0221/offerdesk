@@ -66,7 +66,9 @@ test('旧 AI 草稿及已保存岗位可从原文补全，保留人工内容、�
     await expect(page.getByLabel('加分项', { exact: true })).toHaveValue('有开源经验优先');
     await page.getByRole('button', { name: '保存到岗位列表', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.getByRole('button', { name: '查看 已保存旧岗位 详情', exact: true }).click();
+    // Hosted runners may use a small display, where jobs render as cards.
+    await page.setViewportSize({ width: 800, height: 600 });
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').filter({ hasText: '已保存旧岗位' }).click();
     await expect(page.locator('.requirement-list').filter({ hasText: '加分项' })).toContainText('未填写，请核对原文');
     await page.getByRole('button', { name: '从原文补全', exact: true }).click();
     await expect(page.getByLabel('加分项', { exact: true })).toHaveValue('有开源经验优先');
@@ -80,7 +82,7 @@ test('旧 AI 草稿及已保存岗位可从原文补全，保留人工内容、�
     await expect(page.getByText('修改已保存', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '保存修改', exact: true })).toBeDisabled();
     await app.close(); app = await launch(); page = await app.firstWindow();
-    await page.getByRole('button', { name: '查看 已保存旧岗位 详情', exact: true }).click();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').filter({ hasText: '已保存旧岗位' }).click();
     await expect(page.locator('.requirement-list').filter({ hasText: '必备技能' }).locator('li')).toHaveText(['人工核对的条件', '熟悉 TypeScript 和 React', '有良好的沟通能力']);
     await expect(page.locator('.requirement-list').filter({ hasText: '加分项' }).locator('li')).toHaveText(['有开源经验优先']);
     await expect(page.locator('.requirement-list').filter({ hasText: '到岗条件' }).locator('li')).toHaveText(['每周至少4天,实习至少3个月']);
@@ -89,12 +91,9 @@ test('旧 AI 草稿及已保存岗位可从原文补全，保留人工内容、�
     await page.getByText('原始招聘信息', { exact: false }).click();
     await expect(page.locator('pre')).toHaveText(raw);
   } finally {
-    const child = app.process();
-    if (child.exitCode === null) {
-      const stopped = new Promise(resolve => child.once('exit', resolve));
-      child.kill(); await stopped;
-    }
-    await rm(profile, { recursive: true, force: true, maxRetries: 5 });
+    // Let Electron release Chromium child processes and Windows profile locks.
+    await Promise.all([app.waitForEvent('close'), app.evaluate(({ app }) => app.exit(0)).catch(() => {})]);
+    await rm(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
   }
 });
 
