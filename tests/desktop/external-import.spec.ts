@@ -28,7 +28,7 @@ const launch = (profile: string) => electron.launch({
   ...(process.env.OFFERDESK_TEST_EXECUTABLE ? { executablePath: process.env.OFFERDESK_TEST_EXECUTABLE } : {}),
   args: [...(process.env.OFFERDESK_TEST_EXECUTABLE ? [] : ['desktop']), `--user-data-dir=${profile}`],
 });
-const job = { source: '测试企业官网', source_url: 'https://example.com/jobs?id=123&utm_source=agent', raw_text: '测试公司招聘前端实习生，杭州。', fields: { company: 'MCP测试公司', title: 'MCP前端实习生', city: '杭州' } };
+const job = { source: '测试企业官网', source_url: 'https://example.com/jobs?id=123&utm_source=agent', raw_text: '测试公司招聘前端实习生，杭州。\n## 任职要求\n1. 本科及以上在读，2027届\n2. 熟悉 TypeScript 和 React\n## 加分项\n有开源经验优先\n## 到岗要求\n每周至少4天，实习至少3个月\n两周内到岗', fields: { company: 'MCP测试公司', title: 'MCP前端实习生', city: '杭州' } };
 const result = (value: any) => JSON.parse(value.result.content[0].text);
 test('MCP采集导入、校验、并发去重、重试、核对保存与重启', async () => {
   const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-mcp-test-'));
@@ -47,6 +47,8 @@ test('MCP采集导入、校验、并发去重、重试、核对保存与重启',
     await expect.poll(async () => { firstResponse = await call(args); return firstResponse.result.isError ?? false; }).toBe(false);
     const first = result(firstResponse);
     expect(first.results.map((r: any) => r.status)).toEqual(['created', 'invalid', 'duplicate']);
+    expect(first.results[0].filled_fields).toEqual(expect.arrayContaining(['required', 'preferred', 'availability', 'education', 'days_per_week']));
+    expect(first.results[0].warnings).toBeUndefined();
     expect(result(await call(args))).toEqual(first);
     expect((await call({ ...args, jobs: [job] })).result.isError).toBe(true);
     const concurrent = await Promise.all([call({ batch_id: 'parallel-1', jobs: [job] }), call({ batch_id: 'parallel-2', jobs: [job] })]);
@@ -84,10 +86,21 @@ test('MCP采集导入、校验、并发去重、重试、核对保存与重启',
     await page.getByRole('button', { name: '核对岗位', exact: true }).click();
     await expect(page.getByLabel(/公司名称/)).toHaveValue('MCP测试公司');
     await expect(page.getByLabel(/岗位名称/)).toHaveValue('MCP前端实习生');
+    await expect(page.getByLabel('必备技能', { exact: true })).toHaveValue('本科及以上在读,2027届\n熟悉 TypeScript 和 React');
+    await expect(page.getByLabel('加分项', { exact: true })).toHaveValue('有开源经验优先');
+    await expect(page.getByLabel('到岗条件', { exact: true })).toHaveValue('每周至少4天,实习至少3个月\n两周内到岗');
+    await expect(page.getByLabel('每周到岗', { exact: true })).toHaveValue('每周至少4天');
+    await page.getByRole('button', { name: '从原文补全', exact: true }).click();
+    await expect(page.getByLabel('必备技能', { exact: true })).toHaveValue('本科及以上在读,2027届\n熟悉 TypeScript 和 React');
     await page.getByRole('button', { name: '保存到岗位列表', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.locator('.jobs-table tbody tr')).toHaveCount(1);
     expect(result(await call({ batch_id: 'after-save', jobs: [job] })).results[0].status).toBe('duplicate');
+    await app.close(); app = await launch(profile); page = await app.firstWindow();
+    await page.locator('.job-title-button:visible, .mobile-job-heading:visible').click();
+    await expect(page.locator('.requirement-list').filter({ hasText: '必备技能' }).locator('li')).toHaveText(['本科及以上在读,2027届', '熟悉 TypeScript 和 React']);
+    await expect(page.locator('.requirement-list').filter({ hasText: '加分项' }).locator('li')).toHaveText(['有开源经验优先']);
+    await expect(page.locator('.requirement-list').filter({ hasText: '到岗条件' }).locator('li')).toHaveText(['每周至少4天,实习至少3个月', '两周内到岗']);
     await app.close(); app = undefined;
     expect((await call({ batch_id: 'closed', jobs: [job] })).result.isError).toBe(true);
   } finally { await stopMcp(client.child); if (app) await app.close(); await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
@@ -108,7 +121,6 @@ test('MCP 配置指南与受限复制可用，文件导入入口已移除', asyn
     const expectedArgs = JSON.parse(codexConfig.split('\n')[2].slice('args = '.length));
     await expect(page.getByLabel('MCP 启动命令')).toHaveValue(expectedCommand);
     for (const [index, arg] of expectedArgs.entries()) await expect(page.getByLabel(`MCP 参数 ${index + 1}`, { exact: true })).toHaveValue(arg);
-    await expect(page.getByLabel('连接检查提示词')).toContainText('不要搜索岗位');
     await page.locator('.connection-form').screenshot({ path: test.info().outputPath('mcp-form.png'), animations: 'disabled' });
     await page.getByRole('button', { name: '复制启动命令', exact: true }).click();
     await expect(page.getByRole('dialog').getByRole('status')).toContainText('启动命令已复制');
@@ -119,6 +131,8 @@ test('MCP 配置指南与受限复制可用，文件导入入口已移除', asyn
     const rejected = await page.evaluate(async () => { try { await window.externalImports!.copyText('未展示的任意文本'); return false; } catch { return true; } });
     expect(rejected).toBe(true);
     expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe(expectedArgs[0]);
+    await page.getByRole('button', { name: '已配置，直接验证', exact: true }).click();
+    await expect(page.getByLabel('连接检查提示词')).toContainText('不要搜索岗位');
     const picker = page.getByRole('group', { name: '选择 AI 工具' });
     await expect(picker.getByRole('button')).toHaveCount(6);
     await expect(picker.getByRole('button', { name: '豆包工作', exact: true })).toHaveCount(0);

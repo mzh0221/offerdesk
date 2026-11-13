@@ -1,119 +1,142 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { ArrowRight, Asterisk, Braces, Check, CircleCheck, CircleX, Code, Copy, LoaderCircle, PanelsTopLeft, Plug, Sparkles, Terminal, Workflow } from 'lucide-react';
 import Dialog from './dialog';
-import { Asterisk, Braces, Check, Code, Copy, LoaderCircle, PanelsTopLeft, Plug, Terminal, Workflow } from 'lucide-react';
+import McpManualSetup from './mcp-manual-setup';
 import type { AutoMcpPlan, AutoMcpResult, HarnessConfig } from '@/lib/external-import-bridge';
 
 const toolIcons = { codex: Terminal, claude: Asterisk, 'deepseek-harness': Workflow, zcode: Braces, workbuddy: PanelsTopLeft, opencode: Code };
+type Step = 'connect' | 'verify' | 'collect';
+const steps: { id: Step; title: string }[] = [{ id: 'connect', title: '连接工具' }, { id: 'verify', title: '验证连接' }, { id: 'collect', title: '开始采集' }];
+function ServiceStatus({ state, clientName, detail }: { state: 'success' | 'error' | 'checking'; clientName: string; detail?: string }) {
+    const Icon = state === 'success' ? CircleCheck : state === 'error' ? CircleX : LoaderCircle;
+    return <div className={`mcp-status mcp-status--${state}`} role={state === 'error' ? 'alert' : 'status'} aria-label="OfferDesk 本机服务状态">
+        <span className="mcp-status-icon"><Icon size={23} className={state === 'checking' ? 'spin' : undefined} aria-hidden="true"/></span>
+        <div><strong>{state === 'success' ? 'OfferDesk 服务自检通过' : state === 'error' ? 'OfferDesk 服务自检未通过' : '正在自检 OfferDesk 服务'}</strong><p>{detail || (state === 'success' ? `仅说明 OfferDesk 本机服务可用，未检查 ${clientName} 是否打开或已连接。` : state === 'error' ? '请核对应用路径与启动参数后重试。' : '正在进行只读检查，不会导入岗位。')}</p></div>
+    </div>;
+}
 export default function AiImport({ onClose }: { onClose(): void }) {
     const [configs, setConfigs] = useState<HarnessConfig[]>([]);
     const [selected, setSelected] = useState('codex');
+    const [variant, setVariant] = useState<'code' | 'desktop'>('desktop');
+    const [step, setStep] = useState<Step>('connect');
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
-    const [variant, setVariant] = useState<'code' | 'desktop'>('desktop');
     const [autoPlan, setAutoPlan] = useState<AutoMcpPlan | null>(null);
     const [autoResult, setAutoResult] = useState<AutoMcpResult | null>(null);
     const [autoError, setAutoError] = useState('');
     const [autoBusy, setAutoBusy] = useState<'detect' | 'apply' | 'check' | null>(null);
+    const [manualOpen, setManualOpen] = useState(false);
     const [serviceReady, setServiceReady] = useState<boolean | null>(null);
+    const [serviceIssue, setServiceIssue] = useState('');
+    const requestId = useRef(0);
+    const stageRef = useRef<HTMLElement>(null);
+    const config = configs.find(item => item.id === selected);
+    const clientName = selected === 'claude' ? (variant === 'desktop' ? 'Claude Desktop' : 'Claude Code') : config?.name || 'AI 工具';
+    const locked = autoBusy === 'apply' || autoBusy === 'check';
+    const stepIndex = steps.findIndex(item => item.id === step);
     useEffect(() => {
         let active = true;
         window.externalImports?.configs().then(items => { if (active) setConfigs(items); }).catch(error => { if (active) setError(error.message); });
         return () => { active = false; };
     }, []);
-    const config = configs.find(item => item.id === selected);
-    function resetAuto() { setAutoPlan(null); setAutoResult(null); setAutoError(''); setServiceReady(null); }
+    // Detection only reads configuration. Stale responses cannot replace the newly selected tool.
+    useEffect(() => {
+        if (config) void prepareAuto();
+        return () => { requestId.current++; };
+    }, [selected, variant, configs]);
+    function go(next: Step) {
+        setStep(next); setMessage(''); setError('');
+        if (next === 'connect' && !autoPlan && !autoBusy) void prepareAuto();
+        requestAnimationFrame(() => { stageRef.current?.focus({ preventScroll: true }); stageRef.current?.scrollIntoView({ block: 'start' }); });
+    }
+    function chooseTool(id: string) {
+        if (locked) return;
+        if (id === selected) { go('connect'); return; }
+        setStep('connect'); setMessage(''); setError(''); setManualOpen(false);
+        if (id !== selected) { requestId.current++; setAutoPlan(null); setAutoResult(null); setAutoError(''); setServiceReady(null); setServiceIssue(''); setSelected(id); }
+    }
     async function prepareAuto() {
-        if (!window.externalImports || autoBusy) return;
-        setAutoBusy('detect'); resetAuto();
-        try { setAutoPlan(await window.externalImports.prepareAuto(selected, variant)); }
-        catch (error) { setAutoError(error instanceof Error ? error.message : '检测失败，请使用手动配置'); }
-        finally { setAutoBusy(null); }
+        if (!window.externalImports || !config || locked) return;
+        const id = ++requestId.current;
+        setAutoBusy('detect'); setAutoPlan(null); setAutoResult(null); setAutoError(''); setServiceReady(null); setServiceIssue('');
+        try { const plan = await window.externalImports.prepareAuto(selected, variant); if (id === requestId.current) setAutoPlan(plan); }
+        catch (error) { if (id === requestId.current) setAutoError(error instanceof Error ? error.message : '暂时无法自动配置，请使用手动方式'); }
+        finally { if (id === requestId.current) setAutoBusy(null); }
     }
     async function applyAuto() {
         if (!window.externalImports || !autoPlan?.ready || autoBusy) return;
+        const id = requestId.current;
         setAutoBusy('apply'); setAutoError('');
         try {
             const result = await window.externalImports.applyAuto(autoPlan.token);
-            setAutoResult(result); setServiceReady(result.serviceReady); setAutoPlan(null);
-        } catch (error) { setAutoError(error instanceof Error ? error.message : '配置失败，请重新检测'); setAutoPlan(null); }
-        finally { setAutoBusy(null); }
+            if (id !== requestId.current) return;
+            setAutoResult(result); setAutoPlan(null); go('verify');
+        } catch (error) { if (id === requestId.current) { setAutoError(error instanceof Error ? error.message : '配置失败，请重新检测'); setAutoPlan(null); } }
+        finally { if (id === requestId.current) setAutoBusy(null); }
     }
     async function checkService() {
         if (!window.externalImports || autoBusy) return;
-        setAutoBusy('check'); setAutoError('');
+        setAutoBusy('check'); setServiceReady(null); setServiceIssue('');
         try { setServiceReady(await window.externalImports.checkService()); }
-        catch { setAutoError('无法完成服务自检，请使用下方检查提示词排查'); }
+        catch { setServiceReady(false); setServiceIssue('无法完成 OfferDesk 服务自检。请重试，或重新加载 AI 工具的 MCP 连接。'); }
         finally { setAutoBusy(null); }
     }
     async function copy(text: string, feedback: string) {
         try {
             if (!window.externalImports) throw new Error('桌面复制接口不可用');
             await window.externalImports.copyText(text); setError(''); setMessage(feedback);
-        }
-        catch { setError('请选中文本后按系统复制快捷键'); }
+        } catch { setError('复制失败，请选中文本后按系统复制快捷键'); }
     }
-    return <Dialog title="AI 采集与导入" wide onClose={() => { if (autoBusy !== 'apply') onClose(); }}><div className="dialog-content ai-import">
-        <p className="integration-intro">MCP 让 AI 将岗位直接导入 OfferDesk。服务已内置，无需另装 Node.js 或填写模型密钥。先打开 OfferDesk，再在同一台电脑上的 AI 工具中完成连接。</p>
-        <section className="integration-section">
-            <div className="integration-heading"><h3>选择 MCP 工具</h3></div>
+    return <Dialog title="AI 采集与导入" wide onClose={() => { if (autoBusy !== 'apply') onClose(); }}>
+        <div className="dialog-content ai-import ai-connect">
+            <div className="connect-intro"><span className="connect-eyebrow"><Sparkles size={14}/>让 AI 收集机会</span><h3>接上你的 AI，岗位直接收进来。</h3><p>保持 OfferDesk 打开，在同一台电脑上连接你常用的 AI 工具。</p></div>
+            <ol className="connect-steps" aria-label="接入步骤">{steps.map((item, index) => <li key={item.id} className={index === stepIndex ? 'is-current' : index < stepIndex ? 'is-done' : ''} aria-current={index === stepIndex ? 'step' : undefined}><span>{index < stepIndex ? <Check size={13}/> : index + 1}</span>{item.title}{index < 2 && <i/>}</li>)}</ol>
             <div className="tool-picker" role="group" aria-label="选择 AI 工具">{configs.map((item, index) => {
                 const Icon = toolIcons[item.id as keyof typeof toolIcons] || Plug;
-                return <button key={item.id} type="button" className="tool-option" disabled={!!autoBusy} style={{ '--tool-index': index } as CSSProperties} aria-label={item.name} aria-pressed={selected === item.id} onClick={() => { setSelected(item.id); setMessage(''); setError(''); resetAuto(); }}>
-                    <span className="tool-icon"><Icon size={19} strokeWidth={1.7} aria-hidden="true"/></span>
-                    <span className="tool-copy"><strong>{item.name}</strong><small>{item.subtitle}</small></span>
-                    {selected === item.id && <Check className="tool-selected" size={14} aria-hidden="true"/>}
-                </button>;
+                return <button key={item.id} type="button" className="tool-option" disabled={locked} style={{ '--tool-index': index } as CSSProperties} aria-label={item.name} aria-pressed={selected === item.id} onClick={() => chooseTool(item.id)}><span className="tool-icon"><Icon size={18} aria-hidden="true"/></span><span className="tool-copy"><strong>{item.name}</strong></span>{selected === item.id && <Check className="tool-selected" size={13} aria-hidden="true"/>}</button>;
             })}</div>
             {config && <div key={config.id} className="tool-configuration" role="region" aria-label={`${config.name} 接入配置`}>
-                <section className="auto-setup" aria-label="本机自动配置">
-                    <div className="auto-setup-title"><Plug size={17}/><h4>自动配置本机 MCP</h4></div>
-                    <p>检测本机工具，预览目标位置后写入 offerdesk 连接。其他服务器和模型设置保留。</p>
-                    {selected === 'claude' && <div className="auto-variants" role="group" aria-label="Claude 客户端">{(['desktop', 'code'] as const).map(value => <button className="secondary" key={value} disabled={!!autoBusy} aria-pressed={variant === value} onClick={() => { setVariant(value); resetAuto(); }}>{value === 'desktop' ? 'Claude Desktop' : 'Claude Code'}</button>)}</div>}
-                    {autoPlan && <div className="auto-plan"><p>{autoPlan.message}</p>{autoPlan.target && <p><span>目标位置</span><code>{autoPlan.target}</code></p>}{autoPlan.method && <p><span>写入方式</span>{autoPlan.method}{autoPlan.configured ? ' · 该连接已配置，无需重复写入' : ''}</p>}</div>}
-                    {autoResult && <p className="auto-result" role="status"><Check size={15}/>{autoResult.message}</p>}
-                    <div className="auto-actions">
-                        {autoPlan?.ready ? <button className="primary ai-action" disabled={!!autoBusy} onClick={() => void applyAuto()}>{autoBusy === 'apply' ? <LoaderCircle size={15} className="spin"/> : <Plug size={15}/>}写入配置并检查</button> : <button className="primary ai-action" disabled={!!autoBusy} onClick={() => void prepareAuto()}>{autoBusy === 'detect' && <LoaderCircle size={15} className="spin"/>}{autoResult ? '重新检测配置' : '检测并预览'}</button>}
-                        <button className="secondary" disabled={!!autoBusy} onClick={() => void checkService()}>{autoBusy === 'check' && <LoaderCircle size={15} className="spin"/>}检查 MCP 服务</button>
-                        {autoPlan?.ready && <button className="text-button" disabled={!!autoBusy} onClick={resetAuto}>取消</button>}
-                    </div>
-                    {autoBusy === 'apply' && <p role="status">正在配置并进行只读自检，请稍候…</p>}
-                    {serviceReady !== null && <p className={serviceReady ? 'success' : 'auto-check-failed'} role="status">{serviceReady ? 'MCP 服务自检通过，服务可用。' : 'MCP 服务自检未通过，请核对应用路径与参数。'}</p>}
-                    {autoError && <div className="notice error" role="alert">{autoError}</div>}
-                    <p className="auto-reload-note">最后一步：在 AI 工具中重新加载 MCP 或新开会话，再发送下方连接检查提示词。服务自检不会导入岗位。</p>
+                {selected === 'claude' && <div className="auto-variants" role="group" aria-label="Claude 客户端">{(['desktop', 'code'] as const).map(value => <button className="secondary" key={value} disabled={locked} aria-pressed={variant === value} onClick={() => { if (value !== variant) { requestId.current++; setVariant(value); setStep('connect'); setAutoPlan(null); setAutoResult(null); setMessage(''); setManualOpen(false); } }}>{value === 'desktop' ? 'Claude Desktop' : 'Claude Code'}</button>)}</div>}
+                <section className="connect-stage" ref={stageRef} tabIndex={-1} aria-label={step === 'connect' ? '本机自动配置' : step === 'verify' ? '验证客户端连接' : '采集任务'}>
+                    {step === 'connect' && <>
+                        <div className="connect-stage-heading"><span className="connect-stage-icon"><Plug size={23}/></span><div><span className="connect-kicker">第一步 · 连接工具</span><h4>连接 {clientName}</h4></div></div>
+                        {autoBusy === 'detect' ? <p className="connect-detect"><LoaderCircle size={16} className="spin"/>正在查找可用配置…</p> : <>
+                            {autoPlan?.ready ? <div className="auto-plan"><p><Check size={15}/>{autoPlan.configured ? '已有 OfferDesk 配置，可以直接验证。' : '可以自动配置，其他服务器和模型设置保留。'}</p><code>{autoPlan.target}</code></div> : <div className="connect-fallback"><p>{selected === 'deepseek-harness' ? 'DSH 需要通过补丁接入，按下方三步操作即可。' : '暂时无法自动配置，你也可以复制配置手动接入。'}</p><details><summary>查看检测详情</summary><p>{autoError || autoPlan?.message}</p>{autoPlan?.target && <code>{autoPlan.target}</code>}</details></div>}
+                            <div className="connect-actions">
+                                {autoPlan?.ready ? <button className="primary" disabled={!!autoBusy} onClick={() => autoPlan.configured ? go('verify') : void applyAuto()}>{autoBusy === 'apply' ? <LoaderCircle size={16} className="spin"/> : <Plug size={16}/>} {autoBusy === 'apply' ? '正在连接…' : autoPlan.configured ? '下一步：验证连接' : `连接 ${clientName}`}</button> : <button className="primary" disabled={!!autoBusy} onClick={() => { setManualOpen(true); void copy(config.config, '配置已复制，按下方步骤添加到 AI 工具'); }}><Copy size={16}/>{config.configLabel ? `复制${config.configLabel}` : '复制 MCP 配置'}</button>}
+                                <button className="text-button" disabled={!!autoBusy} onClick={() => go('verify')}>已配置，直接验证<ArrowRight size={14}/></button>
+                            </div>
+                            {autoError && <p className="connect-error" role="alert">{autoError}</p>}
+                            <button className="text-button connect-retry" disabled={!!autoBusy} onClick={() => void prepareAuto()}>重新检测</button>
+                        </>}
+                    </>}
+                    {step === 'verify' && <>
+                        <div className="connect-stage-heading"><span className="connect-stage-icon"><Terminal size={23}/></span><div><span className="connect-kicker">第二步 · 验证连接</span><h4>去 {clientName} 发一条消息</h4></div></div>
+                        {autoResult && <p className="auto-result"><Check size={15}/>配置已写入，接下来验证实际连接。</p>}
+                        <ol className="verify-instructions"><li>在 {clientName} 中重新加载 MCP，或重新打开会话。</li><li>复制下面的消息，粘贴到 AI 对话并发送。</li></ol>
+                        <div className="verify-message"><textarea aria-label="连接检查提示词" readOnly rows={3} value={config.verifyPrompt}/></div>
+                        <div className="connect-actions"><button className="primary" disabled={locked} onClick={() => void copy(config.verifyPrompt, `验证提示词已复制，去 ${clientName} 粘贴发送`)}><Copy size={16}/>复制验证提示词</button><button className="text-button" disabled={locked} onClick={() => go('connect')}>返回配置</button></div>
+                        <p className="verify-expectation">看到真实工具调用，并返回 <code>version: 1</code> 和每批 <code>50</code> 条，才算连接成功。</p>
+                        <div className="verify-continue"><span>确认 AI 已成功返回结果后</span><button className="secondary" disabled={locked} onClick={() => go('collect')}>我已验证，下一步<ArrowRight size={15}/></button></div>
+                    </>}
+                    {step === 'collect' && <>
+                        <div className="connect-stage-heading"><span className="connect-stage-icon"><Sparkles size={23}/></span><div><span className="connect-kicker">第三步 · 开始采集</span><h4>告诉 AI，你想找什么岗位</h4></div></div>
+                        <p>复制任务到 {clientName}，把岗位、城市和条件改成自己的目标后发送。</p>
+                        <div className="task-example"><span>示例任务</span><strong>杭州 / 上海 · 前端实习</strong><small>读取完整岗位详情，导入 OfferDesk 待核对草稿。</small></div>
+                        <div className="connect-actions"><button className="primary" disabled={locked} onClick={() => void copy(config.taskPrompt, `采集任务已复制，去 ${clientName} 粘贴并修改目标`)}><Copy size={16}/>复制采集任务</button><button className="text-button" disabled={locked} onClick={() => go('verify')}>返回验证</button></div>
+                        <details className="task-preview"><summary>查看完整任务内容</summary><textarea aria-label="采集任务提示词" readOnly rows={6} value={config.taskPrompt}/></details>
+                        <div className="collection-destination"><Check size={16}/><span>AI 导入后，回到首页“外部导入待核对”核对并保存。</span></div>
+                    </>}
+                    {message && <p className="copy-feedback" role="status" aria-label="操作反馈"><Check size={14}/>{message}</p>}
+                    {error && <p className="connect-error" role="alert">{error}</p>}
                 </section>
-                <details className="manual-setup"><summary>手动配置与参数</summary>
-                <div className="setup-guide"><h4>在 {config.name} 中完成设置</h4><ol>{config.setup.steps.map(step => <li key={step}>{step}</li>)}</ol></div>
-                {config.connection && <details className="connection-form" open={config.id === 'codex'}>
-                    <summary>{config.id === 'codex' ? '按表单逐项填写（推荐）' : '界面要求填启动命令？查看 STDIO 表单值'}</summary>
-                    <p className="form-help">类型选择 STDIO / 本地命令。以下数值已按当前应用位置生成，复制后无需替换路径。</p>
-                    <dl className="connection-fields">
-                        <div><dt>名称</dt><dd><code>offerdesk</code></dd></div>
-                        <div><dt>类型</dt><dd>STDIO（本地命令）</dd></div>
-                        <div><dt>启动命令</dt><dd><input aria-label="MCP 启动命令" readOnly value={config.connection.command} onFocus={event => event.target.select()}/><button className="text-button" onClick={() => void copy(config.connection!.command, '启动命令已复制')}><Copy size={13}/>复制启动命令</button></dd></div>
-                        <div><dt>参数</dt><dd><ol className="connection-args">{config.connection.args.map((arg, index) => <li key={index}><span>参数 {index + 1}</span><input aria-label={`MCP 参数 ${index + 1}`} readOnly value={arg} onFocus={event => event.target.select()}/><button className="text-button" aria-label={`复制参数 ${index + 1}`} onClick={() => void copy(arg, `参数 ${index + 1} 已复制`)}><Copy size={13}/></button></li>)}</ol><p>点击“添加参数”，按上面的顺序逐项添加。不要把整段 JSON、数组括号或额外引号填进参数栏。</p></dd></div>
-                        <div><dt>环境变量</dt><dd>留空；“环境变量传递”也留空。</dd></div>
-                        <div><dt>工作目录</dt><dd>可留空。如果工具要求必填，可复制：<input aria-label="MCP 工作目录" readOnly value={config.connection.cwd} onFocus={event => event.target.select()}/><button className="text-button" onClick={() => void copy(config.connection!.cwd, '工作目录已复制')}><Copy size={13}/>复制工作目录</button></dd></div>
-                    </dl>
-                    <p>不用填写服务器 URL，也不用把启动命令粘贴到终端运行。AI 工具会自动启动 MCP 服务。</p>
-                </details>}
-                <details className="config-file-guide" open={config.id !== 'codex'}>
-                    <summary>{config.id === 'codex' ? '或编辑配置文件（与表单任选一种）' : '复制到配置文件'}</summary>
-                    {config.setup.file && <p className="config-location"><strong>位置：</strong><code>{config.setup.file}</code></p>}
-                    {config.setup.merge && <p>{config.setup.merge}</p>}
-                    <div className="config-block">
-                    <div className="config-toolbar"><span>{config.configLabel || 'MCP 配置'}</span><button className="text-button" onClick={() => void copy(config.config, '配置已复制')}><Copy size={13}/>复制配置</button></div>
-                    <textarea aria-label={config.configLabel || 'MCP 配置'} rows={8} wrap="off" readOnly value={config.config} onFocus={event => event.target.select()}/>
-                    </div>
-                </details>
-                </details>
-                {config.verifyPrompt && <div className="connection-check"><h4>检查是否连通</h4><p>保存并重启连接后，在 AI 对话中发送下面这段。成功时应实际返回格式版本与每批最多 50 条；仅看到“已添加”还不代表工具能调用。</p><div className="config-block"><div className="config-toolbar"><span>只读连接检查</span><button className="text-button" onClick={() => void copy(config.verifyPrompt!, '检查提示词已复制')}><Copy size={13}/>复制检查提示词</button></div><textarea aria-label="连接检查提示词" rows={3} readOnly value={config.verifyPrompt} onFocus={event => event.target.select()}/></div></div>}
-                {config.taskPrompt && <div className="config-block">
-                    <div className="config-toolbar"><span>采集任务提示词</span><button className="text-button" onClick={() => void copy(config.taskPrompt!, '提示词已复制')}><Copy size={13}/>复制采集提示词</button></div>
-                    <textarea aria-label="采集任务提示词" rows={6} readOnly value={config.taskPrompt} onFocus={event => event.target.select()}/>
-                </div>}
+                <div className="connect-secondary"><McpManualSetup config={config} open={manualOpen} onToggle={setManualOpen} copy={copy}/>
+                    <details className="connection-troubleshooting"><summary>连接故障排查</summary><p>AI 提示“找不到工具”或“Transport closed”？先在 {clientName} 中重新加载 offerdesk 连接，再重试验证消息。仍失败时可自检 OfferDesk 服务；自检结果不代表 AI 已连接。</p><button className="secondary" disabled={!!autoBusy} onClick={() => void checkService()}>{autoBusy === 'check' && <LoaderCircle size={15} className="spin"/>}自检 OfferDesk 服务</button>{autoBusy === 'check' ? <ServiceStatus state="checking" clientName={clientName}/> : serviceReady !== null && <ServiceStatus state={serviceReady ? 'success' : 'error'} clientName={clientName} detail={serviceIssue || undefined}/>}</details>
+                </div>
             </div>}
-            <p>检查通过后，将“采集任务提示词”中的岗位与城市改为自己的目标，再发送给 AI。搜索由 AI 工具完成，导入结果会出现在 OfferDesk 的“外部导入待核对”中。</p>
-        </section>
-        {message && <p className="success" role="status">{message}</p>}{error && <div className="notice error" role="alert" style={{ whiteSpace: 'pre-wrap' }}>{error}</div>}
-    </div></Dialog>;
+            {!config && !error && <p className="connect-detect"><LoaderCircle size={16} className="spin"/>正在加载连接方式…</p>}
+            {!config && error && <p className="notice error" role="alert">{error}</p>}
+            <p className="connect-local-note">岗位先进入待核对草稿，由你确认保存。连接期间请保持 OfferDesk 打开。</p>
+        </div>
+    </Dialog>;
 }

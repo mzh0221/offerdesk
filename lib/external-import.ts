@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { EMPTY_FIELDS } from './domain.ts';
 import { fieldsSchema } from './schema.ts';
+import { completeJobFields } from './complete-fields.ts';
 
 export const externalBatchSchema = z.object({
     batch_id: z.string().trim().min(1).max(200),
@@ -16,6 +17,9 @@ export const externalJobSchema = z.object({
     raw_text: z.string().trim().min(1).max(30000),
     fields: z.preprocess(value => ({ ...EMPTY_FIELDS, ...(value && typeof value === 'object' && !Array.isArray(value) ? value : {}) }),
         fieldsSchema.extend({ company: z.string().trim().min(1).max(200), title: z.string().trim().min(1).max(200) })),
+}).transform(job => {
+    const completed = completeJobFields(job.fields, job.raw_text);
+    return { ...job, fields: completed.fields, filled_fields: completed.filledFields, warnings: completed.warnings };
 });
 export function normalizeSourceUrl(value: string): string {
     const url = new URL(value);
@@ -26,4 +30,4 @@ export function normalizeSourceUrl(value: string): string {
     url.searchParams.sort();
     return url.href;
 }
-export type ExternalImportResult = { index: number; status: 'created' | 'duplicate' | 'invalid'; draft_id?: string; record_id?: string; error?: string };
+export type ExternalImportResult = { index: number; status: 'created' | 'duplicate' | 'invalid'; draft_id?: string; record_id?: string; error?: string; filled_fields?: string[]; warnings?: string[] };

@@ -7,6 +7,7 @@ import { useUnsavedChanges } from './use-unsaved-changes';
 import { recognizeScreenshot } from '@/lib/ocr';
 import { extractJobFields } from '@/lib/ocr-fields';
 import JobForm, { cleanFields } from './job-form';
+import CompleteFields from './complete-fields';
 import AttachmentImage from './attachment-image';
 import { localClient as api } from '@/lib/local-client';
 import { EMPTY_FIELDS, validateImage, safeSourceUrl, type Fields, type Attachment } from '@/lib/domain';
@@ -270,7 +271,7 @@ export default function AddJob({ onClose, onSaved, resume, initialInput = 'image
       {controller.current && <button className="secondary" onClick={() => controller.current?.abort()}>取消识别</button>}
       {inputType === 'images' && <button className="primary" disabled={busy || (!files.length && !attachments.length)} onClick={() => void recognize()}>{recognized ? (ocrErrors.length ? '重试未完成截图' : '重新识别截图') : '离线识别截图'}</button>}
       {text.trim() && <button className="primary" disabled={busy} onClick={prefill}>根据文字预填</button>}
-      <button className="secondary" disabled={busy} onClick={manual}>{busy && <LoaderCircle size={16} className="spin"/>}手动填写</button></div></> : <form id="new-job-form" onSubmit={save}><fieldset disabled={busy || loadingDraft}><p className="form-help">预填结果可能有误，请对照原文核对。仅公司和岗位名称必填，其他信息可留空。</p><div className="review-layout"><aside className="review-source">{(text || files.length > 0 || attachments.length > 0) && <details className="source-details" open><summary><FileText size={15}/>核对原始招聘信息</summary>{text && <pre>{text}</pre>}<div className="image-grid">{files.map((f, i) => <figure className="source-image" key={i}><Preview file={f}/></figure>)}{attachments.map(a => <AttachmentImage key={a.id} item={a}/>)}</div></details>}</aside><div className="review-form"><JobForm value={fields} onChange={setFields}><label className="block-label">招聘链接（选填）<input type="url" maxLength={2000} value={source} onChange={e => setSource(e.target.value)} placeholder="https://…"/></label></JobForm></div></div></fieldset></form>}
+      <button className="secondary" disabled={busy} onClick={manual}>{busy && <LoaderCircle size={16} className="spin"/>}手动填写</button></div></> : <form id="new-job-form" onSubmit={save}><fieldset disabled={busy || loadingDraft}><p className="form-help">预填结果可能有误，请对照原文核对。仅公司和岗位名称必填，其他信息可留空。</p><div className="review-layout"><aside className="review-source">{(text || files.length > 0 || attachments.length > 0) && <details className="source-details" open><summary><FileText size={15}/>核对原始招聘信息</summary>{text && <pre>{text}</pre>}<div className="image-grid">{files.map((f, i) => <figure className="source-image" key={i}><Preview file={f}/></figure>)}{attachments.map(a => <AttachmentImage key={a.id} item={a}/>)}</div></details>}</aside><div className="review-form"><CompleteFields value={fields} rawText={text} onChange={setFields}/><JobForm value={fields} onChange={setFields}><label className="block-label">招聘链接（选填）<input type="url" maxLength={2000} value={source} onChange={e => setSource(e.target.value)} placeholder="https://…"/></label></JobForm></div></div></fieldset></form>}
     <p className="local-foot" role="status">{savingDraft ? '正在保存草稿…' : dirty ? '草稿尚未保存' : hasContent ? '草稿已保存 · 数据保存在本机' : '数据保存在本机'}</p>
   </div></Dialog>;
 }

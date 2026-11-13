@@ -8,7 +8,7 @@ function harnessConfigs(command, args) {
   const json = value => JSON.stringify(value, null, 2);
   const generic = json({ mcpServers: { offerdesk: entry } });
   const verifyPrompt = '请只调用 OfferDesk 的 get_import_spec，告诉我返回的 version 和每批岗位上限。不要搜索岗位，也不要调用 import_jobs 或导入任何数据。如果找不到工具，请直接说明尚未连接。';
-  const collectPrompt = '请寻找杭州或上海的前端实习岗位。先调用 OfferDesk 的 get_import_spec 查看格式，再搜索并读取招聘详情，保留来源链接和完整原文，调用 import_jobs 导入待核对草稿。未写明的信息留空，不编造、不自动投递。最后告诉我成功、重复和失败各多少条。';
+  const collectPrompt = '请寻找杭州或上海的前端实习岗位。先调用 OfferDesk 的 get_import_spec 查看格式，再逐个打开岗位详情并展开完整正文，不只读取搜索摘要。保留来源链接、正文栏目与全部原文，逐项填写基本信息、薪资、学历、毕业年份、实习时长和每周到岗；将全部任职要求填入 required、全部加分/优先条件填入 preferred、完整出勤与到岗安排填入 availability，保留原句与限定条件。原文有写就填写，确认未写才留空，不编造、不把职责当要求、不自动投递。调用 import_jobs 导入待核对草稿，检查回执 warnings，最后告诉我成功、重复、失败各多少条和仍需核对的缺项。';
   const setup = {
     codex: { steps: ['在 Codex / ChatGPT 桌面端打开“设置 → MCP 服务器 → 添加服务器”（IDE 扩展从齿轮菜单进入）。', '选择 STDIO，按下方逐项填写；启动命令与参数分别复制，参数每项单独添加。', '保存后重启该 MCP 服务或客户端；在新对话输入 /mcp，查看 offerdesk 是否可用。'], file: `${home}/.codex/config.toml`, merge: '将 [mcp_servers.offerdesk] 段添加到文件末尾；已有同名段时更新该段，不要重复添加。' },
     claude: { steps: ['Claude Code：在当前项目根目录打开或新建 .mcp.json。Claude Desktop：打开本地 MCP 的开发者配置（旧版“设置 → Developer → Edit Config”）。', '点击“复制配置”。空文件可粘贴整段；已有 mcpServers 时只把 offerdesk 加入其中，保留其他服务器。', 'Claude Code 重新打开会话，并在 /mcp 中确认或批准项目服务器；Claude Desktop 完全退出后重新打开，再查看本地 MCP / Connectors。'], file: windows ? '%APPDATA%\\Claude\\claude_desktop_config.json' : '~/Library/Application Support/Claude/claude_desktop_config.json', merge: 'Claude Code 使用项目 .mcp.json；上方路径是 Claude Desktop 的配置文件。两者均合并 mcpServers.offerdesk。' },

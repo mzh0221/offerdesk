@@ -37,6 +37,11 @@ test('正常与减少动态效果模式下，AI 工具切换、键盘操作和�
       await picker.getByRole('button', { name: 'OpenCode', exact: true }).click();
       await expect(page.getByRole('region', { name: 'OpenCode 接入配置' })).toBeVisible();
       await expect(picker.locator('[aria-pressed=true]')).toHaveCount(1);
+      await expect(page.locator('.connect-stage .connect-actions .primary')).toBeInViewport();
+      await page.getByRole('button', { name: '已配置，直接验证', exact: true }).click();
+      await expect(page.getByRole('region', { name: '验证客户端连接', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: '复制验证提示词', exact: true }).scrollIntoViewIfNeeded();
+      await expect(page.getByRole('button', { name: '复制验证提示词', exact: true })).toBeInViewport();
       expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
       if (reducedMotion === 'reduce') {
         expect(await page.evaluate(() => document.getAnimations().filter(animation => animation.playState === 'running' || animation.pending).length)).toBe(0);

@@ -7,7 +7,7 @@ export type HarnessConfig = {
 export type AutoMcpPlan = {
     token: string; toolId: string; ready: boolean; target?: string; configured: boolean; method?: string; message: string;
 };
-export type AutoMcpResult = { target: string; serviceReady: boolean; message: string };
+export type AutoMcpResult = { target: string; message: string };
 declare global {
     interface Window {
         externalImports?: {

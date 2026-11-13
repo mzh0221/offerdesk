@@ -164,8 +164,7 @@ if (!app.requestSingleInstanceLock()) {
       autoApplying = true;
       try {
         await require('./auto-mcp.cjs').apply(plan);
-        const serviceReady = await checkLocalMcp();
-        return { target: plan.target, serviceReady, message: '本机 offerdesk 配置已写入。' };
+        return { target: plan.target, message: '本机 offerdesk 配置已写入。请在 AI 工具中重新加载 MCP 并验证连接。' };
       } finally { autoApplying = false; }
     });
     require('electron').ipcMain.handle('external-import:service-check', event => {

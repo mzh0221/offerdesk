@@ -4,6 +4,7 @@ import Dialog from './dialog';
 import Select from './select';
 import { useUnsavedChanges } from './use-unsaved-changes';
 import JobForm, { cleanFields } from './job-form';
+import CompleteFields from './complete-fields';
 import AttachmentImage from './attachment-image';
 import RecruitmentLink from './recruitment-link';
 import { localClient as api } from '@/lib/local-client';
@@ -83,6 +84,7 @@ export default function JobDetail({ id, onClose, onChanged }: {
                 <div className="detail-columns">
                     <div className="detail-main-column">
                         <section className="detail-section"><div className="section-title"><h3>岗位要求</h3><button type="button" className="text-button" onClick={() => setEditing(!editing)} title="收起表单不会撤销修改，可使用底部取消修改"><Pencil size={15}/>{editing ? '收起编辑' : '编辑信息'}</button></div>
+                            <CompleteFields value={job} rawText={raw} onChange={value => { setJob({ ...job, ...value }); setEditing(true); setSaved(false); }}/>
                             {editing ? <><JobForm value={job} onChange={v => setJob({ ...job, ...v })}><label className="block-label">招聘链接<input type="url" value={job.source_url || ''} onChange={e => setJob({ ...job, source_url: e.target.value })}/></label></JobForm></> : <>
                                 <div className="detail-facts"><span><GraduationCap size={18}/>{job.education || '学历未说明'}</span><span><CalendarDays size={18}/>{job.graduation_year || '毕业年份未说明'}</span><span><Clock3 size={18}/>{job.internship_duration || '时长未说明'}</span><span><Building2 size={18}/>{job.days_per_week || '到岗天数未说明'}</span></div>
                                 <div className="tags">{job.tags.map((tag, i) => <span key={i}>{tag}</span>)}</div>

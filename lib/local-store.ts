@@ -176,7 +176,9 @@ export async function importExternalJobs(body: unknown) {
                 external_source: job.source, external_batch_id: batch.batch_id, external_key: key,
                 created_at: now, updated_at: now };
             store.put(row); rows.push(row);
-            results.push({ index, status: 'created', draft_id: row.id });
+            results.push({ index, status: 'created', draft_id: row.id,
+                ...(job.filled_fields.length ? { filled_fields: job.filled_fields } : {}),
+                ...(job.warnings.length ? { warnings: job.warnings } : {}) });
         });
         const response = { batch_id: batch.batch_id, results };
         store.put({ id: crypto.randomUUID(), kind: 'external-batch', batch_id: batch.batch_id, fingerprint, response });

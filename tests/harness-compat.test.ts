@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 const require = createRequire(import.meta.url);
 const { harnessConfigs } = require('../desktop/harness-config.cjs');
-const { SUPPORTED_PROTOCOLS } = require('../desktop/mcp-stdio.cjs');
+const { SUPPORTED_PROTOCOLS, spec } = require('../desktop/mcp-stdio.cjs');
 test('不同客户端配置保留包含中文、空格和Windows反斜线的命令与参数', () => {
     for (const command of ['/Applications/Offer Desk.app/Contents/MacOS/OfferDesk', 'C:\\Users\\用户\\Offer Desk\\OfferDesk.exe']) {
         const args = ['--offerdesk-mcp', '--user-data-dir=/目录/空 格'];
@@ -17,6 +17,9 @@ test('不同客户端配置保留包含中文、空格和Windows反斜线的命�
             assert.equal(config.connection.cwd, command.startsWith('C:') ? 'C:\\Users\\用户\\Offer Desk' : '/Applications/Offer Desk.app/Contents/MacOS');
             assert.ok(config.verifyPrompt.includes('get_import_spec'));
             assert.ok(config.taskPrompt.includes('import_jobs'));
+            assert.ok(config.taskPrompt.includes('required'));
+            assert.ok(config.taskPrompt.includes('preferred'));
+            assert.ok(config.taskPrompt.includes('availability'));
         }
         for (const config of configs.filter((item: any) => item.id !== 'codex')) {
             const value = JSON.parse(config.config);
@@ -30,6 +33,19 @@ test('不同客户端配置保留包含中文、空格和Windows反斜线的命�
         const codex = configs.find((item: any) => item.id === 'codex').config;
         assert.equal(JSON.parse(codex.split('\n')[1].slice('command = '.length)), command);
         assert.deepEqual(JSON.parse(codex.split('\n')[2].slice('args = '.length)), args);
+    }
+});
+
+test('MCP 格式说明要求读取完整正文并逐项填写，示例包含三类要求', () => {
+    assert.ok(spec.instructions.includes('完整读取'));
+    assert.ok(spec.instructions.includes('warnings'));
+    const fields = spec.tools.find((tool: any) => tool.name === 'import_jobs').inputSchema.properties.jobs.items.properties.fields.properties;
+    assert.ok(fields.city.description.includes('工作地点'));
+    assert.ok(fields.salary.description.includes('薪资原文'));
+    assert.deepEqual(spec.tools.find((tool: any) => tool.name === 'import_jobs').inputSchema.properties.jobs.items.properties.fields.required, Object.keys(fields));
+    for (const key of ['required', 'preferred', 'availability']) {
+        assert.ok(fields[key].description.length > 20);
+        assert.ok(spec.example.jobs[0].fields[key].length > 0);
     }
 });
 for (const directDescriptor of [false, true]) test(`MCP版本协商、目录探测与分片消息（${directDescriptor ? 'Windows描述符兼容分支' : '标准输入流'}）`, async () => {

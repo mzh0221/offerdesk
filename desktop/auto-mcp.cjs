@@ -49,7 +49,7 @@ function prepare(config, variant, options) {
   const { homeDir, appDataDir, env = {}, platform = process.platform } = options;
   const { id, connection } = config;
   const plan = { toolId: id, variant, createdAt: Date.now(), connection, ready: false, name: config.name };
-  if (id === 'deepseek-harness') return { ...plan, message: 'DSH 需在目标会话加载 Cordis 补丁，请使用下方三步说明。可先检查 OfferDesk 的 MCP 服务是否可用。' };
+  if (id === 'deepseek-harness') return { ...plan, message: 'DSH 需在目标会话加载 Cordis 补丁，请使用下方三步说明。' };
   let target;
   let cli;
   let args;
