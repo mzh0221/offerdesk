@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, net, protocol, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, dialog, net, protocol, session, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -9,11 +9,7 @@ if (process.argv.includes('--offerdesk-mcp')) {
   const directory = process.argv.find(value => value.startsWith('--user-data-dir='))?.slice('--user-data-dir='.length);
   require('./mcp-stdio.cjs').start(directory, () => app.quit());
 } else if (process.argv.includes('--offerdesk-import')) {
-  const directory = process.argv.find(value => value.startsWith('--user-data-dir='))?.slice('--user-data-dir='.length);
-  const filename = process.argv[process.argv.indexOf('--offerdesk-import') + 1];
-  require('./mcp-stdio.cjs').importFile(filename, directory).then(result => {
-    process.stdout.write(JSON.stringify(result) + '\n', () => app.exit(0));
-  }).catch(error => { process.stderr.write(error.message + '\n', () => app.exit(1)); });
+  process.stderr.write('文件导入已移除，请通过 MCP 的 import_jobs 导入岗位。\n', () => app.exit(1));
 } else {
 // Keep the application's profile and origin stable across upgrades and installers.
 const profile = process.argv.find(value => value.startsWith('--user-data-dir='));
@@ -27,6 +23,21 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let window;
+const autoPlans = new Map();
+let autoApplying = false;
+let serviceCheck;
+
+function currentHarnessConfigs() {
+  const args = [...(app.isPackaged ? [] : [app.getAppPath()]), '--offerdesk-mcp', ...(profile ? [profile] : [])];
+  return require('./harness-config.cjs').harnessConfigs(process.execPath, args);
+}
+function authorizeImportUi(event) {
+  if (event.sender !== window?.webContents || event.senderFrame !== event.sender.mainFrame || event.senderFrame.url !== APP_URL) throw new Error('未授权请求');
+}
+function checkLocalMcp() {
+  if (!serviceCheck) serviceCheck = require('./auto-mcp.cjs').checkService(currentHarnessConfigs()[0].connection).finally(() => { serviceCheck = null; });
+  return serviceCheck;
+}
 
 async function openExternal(value) {
   const url = externalUrl(value);
@@ -123,9 +134,43 @@ if (!app.requestSingleInstanceLock()) {
       if (!item.getURL().startsWith('blob:offerdesk://app/')) item.cancel();
     });
     require('electron').ipcMain.handle('external-import:configs', event => {
-      if (event.sender !== window?.webContents || event.senderFrame !== event.sender.mainFrame || event.senderFrame.url !== APP_URL) throw new Error('未授权请求');
-      const args = [...(app.isPackaged ? [] : [app.getAppPath()]), '--offerdesk-mcp', ...(profile ? [profile] : [])];
-      return require('./harness-config.cjs').harnessConfigs(process.execPath, args);
+      authorizeImportUi(event);
+      return currentHarnessConfigs();
+    });
+    require('electron').ipcMain.handle('external-import:copy', (event, text) => {
+      authorizeImportUi(event);
+      const allowed = new Set(currentHarnessConfigs().flatMap(config => [config.config, config.taskPrompt, config.verifyPrompt, config.connection?.command, config.connection?.cwd, ...(config.connection?.args || [])]).filter(value => typeof value === 'string'));
+      if (typeof text !== 'string' || !allowed.has(text)) throw new Error('只能复制当前接入页面提供的配置与提示词');
+      clipboard.writeText(text);
+    });
+    require('electron').ipcMain.handle('external-import:auto-prepare', (event, id, variant = 'desktop') => {
+      authorizeImportUi(event);
+      const config = currentHarnessConfigs().find(item => item.id === id);
+      if (!config || typeof variant !== 'string') throw new Error('请选择支持的 MCP 工具。');
+      const automatic = require('./auto-mcp.cjs');
+      const plan = automatic.prepare(config, variant, { homeDir: app.getPath('home'), appDataDir: app.getPath('appData'), env: process.env });
+      for (const [key, value] of autoPlans) if (Date.now() - value.createdAt > 5 * 60 * 1000) autoPlans.delete(key);
+      if (autoPlans.size >= 8) autoPlans.delete(autoPlans.keys().next().value);
+      const token = plan.ready ? require('node:crypto').randomUUID() : '';
+      if (plan.ready) autoPlans.set(token, plan);
+      return automatic.publicPlan(plan, token);
+    });
+    require('electron').ipcMain.handle('external-import:auto-apply', async (event, token) => {
+      authorizeImportUi(event);
+      if (autoApplying) throw new Error('正在配置，请稍后重试。');
+      const plan = typeof token === 'string' && autoPlans.get(token);
+      if (!plan) throw new Error('请先检测并预览配置。');
+      autoPlans.delete(token);
+      autoApplying = true;
+      try {
+        await require('./auto-mcp.cjs').apply(plan);
+        const serviceReady = await checkLocalMcp();
+        return { target: plan.target, serviceReady, message: '本机 offerdesk 配置已写入。' };
+      } finally { autoApplying = false; }
+    });
+    require('electron').ipcMain.handle('external-import:service-check', event => {
+      authorizeImportUi(event);
+      return checkLocalMcp();
     });
     require('./ocr.cjs').registerOcr(() => window);
     require('./import-bridge.cjs').registerImportBridge(app, require('electron').ipcMain, () => window);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MapPin, Pencil, Trash2, Check, LoaderCircle, FileImage, Building2, CalendarDays, GraduationCap, Clock3 } from 'lucide-react';
 import Dialog from './dialog';
+import Select from './select';
 import { useUnsavedChanges } from './use-unsaved-changes';
 import JobForm, { cleanFields } from './job-form';
 import AttachmentImage from './attachment-image';
@@ -91,7 +92,7 @@ export default function JobDetail({ id, onClose, onChanged }: {
                         {(!!files.length || raw) && <details className="source-details"><summary><FileImage size={16}/>原始招聘信息{files.length > 0 ? ` · ${files.length} 张截图` : ''}</summary>{raw && <pre>{raw}</pre>}<div className="image-grid">{files.map(file => <AttachmentImage key={file.id} item={file}/>)}</div></details>}
                     </div>
                     <aside className="detail-sidebar" aria-label="投递记录">
-                        <section className="detail-section"><h3>投递记录</h3><p className="form-help">修改后请点击底部“保存修改”。</p><div className="form-grid"><label>当前状态<select value={job.status} onChange={e => { setSaved(false); setJob({ ...job, status: e.target.value as Job['status'] }); }}>{STATUSES.map(status => <option key={status}>{status}</option>)}</select></label><label>投递日期<input type="date" value={job.applied_at || ''} onChange={e => { setSaved(false); setJob({ ...job, applied_at: e.target.value || null }); }}/></label></div>
+                        <section className="detail-section"><h3>投递记录</h3><p className="form-help">修改后请点击底部“保存修改”。</p><div className="form-grid"><label>当前状态<Select value={job.status} onChange={e => { setSaved(false); setJob({ ...job, status: e.target.value as Job['status'] }); }}>{STATUSES.map(status => <option key={status}>{status}</option>)}</Select></label><label>投递日期<input type="date" value={job.applied_at || ''} onChange={e => { setSaved(false); setJob({ ...job, applied_at: e.target.value || null }); }}/></label></div>
                             <label className="block-label">个人备注<textarea rows={8} maxLength={10000} value={job.notes} onChange={e => { setSaved(false); setJob({ ...job, notes: e.target.value }); }} placeholder="记录面试安排、沟通结果，或下次要准备的内容…"/></label>
                         </section>
                     </aside>

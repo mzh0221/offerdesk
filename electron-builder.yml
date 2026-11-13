@@ -13,6 +13,7 @@ files:
   - import-bridge.cjs
   - mcp-stdio.cjs
   - harness-config.cjs
+  - auto-mcp.cjs
   - package.json
   - renderer-dist/**/*
   - '!node_modules/**/*'

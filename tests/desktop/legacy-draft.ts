@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 
 // Emulate records written by versions that still offered direct text entry.
 export async function addLegacyTextDraft(page: Page, rawText: string) {
-    await page.getByRole('heading', { name: '岗位与投递', exact: true }).waitFor();
+    await page.getByRole('heading', { name: '让 AI 帮你找机会', exact: true }).waitFor();
     await page.evaluate(raw => new Promise<void>((resolve, reject) => {
         const request = indexedDB.open('offerdesk-local-v1', 1);
         request.onerror = () => reject(request.error);

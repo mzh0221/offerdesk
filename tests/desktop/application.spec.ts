@@ -13,7 +13,7 @@ test('安装包界面离线运行，岗位、投递记录和截图在完整重�
       env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1' },
     });
     const page = await application.firstWindow();
-    await expect(page.getByRole('heading', { name: '岗位与投递', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: legacy ? '岗位与投递' : '让 AI 帮你找机会', exact: true })).toBeVisible();
     return page;
   };
   try {

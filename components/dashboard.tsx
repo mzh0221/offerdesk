@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BriefcaseBusiness, ArrowUpRight, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, ArrowRight, CircleHelp, LoaderCircle, X, Check, RotateCcw, Pencil } from 'lucide-react';
+import { BriefcaseBusiness, ArrowUpRight, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, ArrowRight, CircleHelp, LoaderCircle, X, Check, RotateCcw, Pencil, Sparkles, ShieldCheck } from 'lucide-react';
 import AddJob from './add-job';
 import AiImport from './ai-import';
 import JobDetail from './job-detail';
@@ -99,18 +99,18 @@ export default function Dashboard() {
         <main className="main">
             <header className="workbench-header">
                 <a href="/" className="brand"><span className="brand-icon"><BriefcaseBusiness size={20}/></span>OfferDesk<span className="brand-dot">.</span></a>
-                <span className="header-divider"/><span className="workspace-name">岗位投递台</span>
+                <span className="header-divider"/><span className="workspace-name">AI 求职工作台</span>
                 <div className="header-tools">
-                    <button className="help-button" onClick={() => setHelp(true)}><CircleHelp size={16}/><span>使用说明</span></button>
+                    <button className="help-button" aria-label="使用说明" onClick={() => setHelp(true)}><CircleHelp size={16}/><span>使用说明</span></button>
                     <span className="account-label">本地工作台</span>
                 </div>
             </header>
             <div className="page-content">
                 <section className="workbench-title">
-                    <div><h1>岗位与投递</h1><p>截图收集岗位，直接跟进投递。</p></div>
-                    <div className="entry-actions"><button className="secondary" onClick={() => setAiImport(true)}>AI 工具接入</button><button className="secondary" onClick={() => openAdd('manual')}><Pencil size={15}/>手动录入</button><button className="primary screenshot-action" onClick={() => openAdd()}><ImagePlus size={18}/>上传岗位截图</button></div>
+                    <div><h1>让 AI 帮你找机会</h1><p>连接常用 AI 工具，采集岗位后自动导入，核对保存并跟进投递。</p></div>
+                    <div className="entry-actions"><button className="primary ai-action" onClick={() => setAiImport(true)}><Sparkles size={17}/>AI 采集与导入<ArrowUpRight size={15}/></button><button className="secondary screenshot-action" onClick={() => openAdd()}><ImagePlus size={17}/>上传岗位截图</button><button className="text-button manual-action" onClick={() => openAdd('manual')}><Pencil size={14}/>手动录入</button></div>
                 </section>
-                <div className="local-inline"><span className="local-label">本地</span><span>岗位列表保存在本机，截图可用内置 OCR 离线识别。</span><button className="text-button" onClick={() => setHelp(true)}>说明</button></div>
+                <div className="collection-flow"><ol aria-label="岗位收集流程"><li><span>01</span>AI 采集<ArrowRight size={13} aria-hidden="true"/></li><li><span>02</span>核对入库<ArrowRight size={13} aria-hidden="true"/></li><li><span>03</span>投递跟进</li></ol><span className="storage-note"><ShieldCheck size={14}/>岗位数据保存在本机</span></div>
                 <section className="jobs-section" aria-label="岗位列表">
                     <div className="list-navigation"><nav className="status-tabs" aria-label="按投递状态筛选">
                         <button aria-pressed={!status} className={!status ? 'selected' : ''} onClick={() => setStatus('')}>全部岗位<span>{facets.length}</span></button>
@@ -140,13 +140,13 @@ export default function Dashboard() {
                         </table></div>
                         <div className="mobile-jobs">{jobs.map(job => <article className="job-card" key={job.id}><button className="mobile-job-heading" onClick={() => openDetail(job.id)}><span><strong>{job.title}</strong><small>{job.company} · {job.city || '地点未说明'}</small></span><ArrowUpRight size={17}/></button><div className="mobile-job-summary"><span className="salary">{job.salary || '薪资未说明'}</span><span>{job.days_per_week}</span></div><div className="tags">{job.tags.slice(0, 3).map((tag, i) => <span key={i}>{tag}</span>)}</div><div className="mobile-job-source"><RecruitmentLink compact url={job.source_url} jobTitle={job.title}/></div><div className="mobile-job-progress">{statusControl(job)}<span>{job.applied_at ? `投递于 ${job.applied_at}` : '尚未投递'}</span></div></article>)}</div>
                         {loading && <div className="table-loading"><LoaderCircle className="spin" size={18}/>正在读取岗位…</div>}
-                        {!loading && !jobs.length && <div className="empty"><span className="empty-icon"><ImagePlus size={30}/></span><h3>{query || city || status || type ? '没有符合条件的岗位' : '收集你的第一个岗位'}</h3><p>{query || city || status || type ? '调整筛选条件，查看其他岗位。' : '支持截图识别、AI 导入或手动填写，仅公司和岗位必填。'}</p><button className="secondary" onClick={query || city || status || type ? reset : () => openAdd()}>{query || city || status || type ? '清除筛选' : '上传岗位截图'}<ArrowRight size={14}/></button>{!(query || city || status || type) && <div className="empty-alternatives"><button className="text-button" onClick={() => openAdd('manual')}>直接手动录入</button></div>}</div>}
+                        {!loading && !jobs.length && <div className="empty"><span className="empty-icon">{query || city || status || type ? <Search size={30}/> : <Sparkles size={30}/>}</span><h3>{query || city || status || type ? '没有符合条件的岗位' : '把 AI 找到的机会，收进这里。'}</h3><p>{query || city || status || type ? '调整筛选条件，查看其他岗位。' : <>连接 Codex、WorkBuddy 等 AI 工具，采集后自动导入待核对草稿。<br/>确认岗位信息后保存，集中跟进每一次投递。</>}</p><button className={query || city || status || type ? 'secondary' : 'primary ai-action'} onClick={query || city || status || type ? reset : () => setAiImport(true)}>{query || city || status || type ? '清除筛选' : '开始 AI 导入'}<ArrowRight size={14}/></button></div>}
                     </div>
                     <footer className="table-footer"><span>共 {total} 个岗位{jobs.length ? ` · 本页 ${jobs.length} 个` : ''}</span><div><button className="icon-button" aria-label="上一页" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={16}/></button><span className="page-number">{page}</span><button className="icon-button" aria-label="下一页" disabled={page * 20 >= total || loading} onClick={() => setPage(page + 1)}><ChevronRight size={16}/></button></div></footer>
                 </section>
             </div>
         </main>
-    {aiImport && <AiImport onClose={() => setAiImport(false)} onImported={() => void loadDrafts()}/>}
-    {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}{add && <AddJob initialInput={entryMode} resume={resume} onClose={closeAdd} onSaved={() => { closeAdd(); reload(); setToast('新岗位已收进工作台'); }}/>}{detail && <JobDetail id={detail} onClose={() => setDetail(null)} onChanged={reload}/>}{help && <Dialog title="使用你的岗位投递台" onClose={() => setHelp(false)}><div className="dialog-content guide"><span className="mini-icon"><BriefcaseBusiness size={24}/></span><h3>三步，把岗位整理清楚。</h3><ol><li><strong>收集</strong><p>上传同一岗位的1—5张截图，也可使用 AI 工具导入或手动填写。截图可以拖拽、粘贴、排序。</p></li><li><strong>核对</strong><p>对照截图或招聘原文填写公司、岗位和要求，没有写明的条件可以留空。</p></li><li><strong>跟进</strong><p>打开岗位详情，修改状态、日期和备注；招聘原文和截图随时可以回看。</p></li></ol><div className="notice">当前为本地模式，下载后从空白岗位列表开始。岗位与截图仅保存在当前设备，不会同步到其他设备。</div><button className="primary full" onClick={() => setHelp(false)}>开始整理<ArrowRight size={15}/></button></div></Dialog>}
+    {aiImport && <AiImport onClose={() => setAiImport(false)}/>}
+    {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}{add && <AddJob initialInput={entryMode} resume={resume} onClose={closeAdd} onSaved={() => { closeAdd(); reload(); setToast('新岗位已收进工作台'); }}/>}{detail && <JobDetail id={detail} onClose={() => setDetail(null)} onChanged={reload}/>}{help && <Dialog title="使用说明" onClose={() => setHelp(false)}><div className="dialog-content guide"><span className="mini-icon"><Sparkles size={24}/></span><h3>AI 收集机会，你掌握进度。</h3><ol><li><strong>让 AI 采集岗位</strong><p>打开“AI 采集与导入”，连接常用工具，再告诉 AI 目标岗位、城市和要求。搜索由所选 AI 工具完成，结果导入待核对草稿。</p></li><li><strong>核对后保存</strong><p>检查公司、岗位和招聘链接，确认后保存到列表。还支持截图离线 OCR 和手动录入，没有写明的条件可以留空。</p></li><li><strong>持续跟进投递</strong><p>在列表中更新投递状态，打开详情记录日期和备注；招聘原文和截图随时可回看。</p></li></ol><div className="notice">导入时请保持 OfferDesk 打开，AI 工具需在同一台电脑运行。岗位与截图保存在本机。</div><button className="primary ai-action full" onClick={() => { setHelp(false); setAiImport(true); }}><Sparkles size={16}/>连接 AI 工具<ArrowRight size={15}/></button></div></Dialog>}
   </div>;
 }

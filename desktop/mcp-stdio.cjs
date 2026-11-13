@@ -86,26 +86,4 @@ function start(directory = defaultDirectory(), onClose = () => {}) {
   input.on('error', error => { process.stderr.write(error.message + '\n'); process.exitCode = 1; onClose(); });
   input.on('end', onClose);
 }
-async function importFile(filename, directory = defaultDirectory()) {
-  if (!filename || filename.startsWith('--')) throw new Error('用法：OfferDesk --offerdesk-import <JSON文件绝对路径或 ->');
-  let text = '';
-  if (filename === '-') {
-    let size = 0;
-    const input = inputStream();
-    input.setEncoding('utf8');
-    for await (const chunk of input) {
-      size += Buffer.byteLength(chunk);
-      if (size > MAX_BYTES) throw new Error('文件超过4MB');
-      text += chunk;
-    }
-  } else {
-    if (!path.isAbsolute(filename)) throw new Error('请提供 JSON 文件的绝对路径');
-    if (fs.statSync(filename).size > MAX_BYTES) throw new Error('文件超过4MB');
-    text = fs.readFileSync(filename, 'utf8');
-    if (Buffer.byteLength(text) > MAX_BYTES) throw new Error('文件超过4MB');
-  }
-  let body;
-  try { body = JSON.parse(text.replace(/^\uFEFF/, '')); } catch { throw new Error('文件不是有效 JSON'); }
-  return importJobs(directory, body);
-}
-module.exports = { start, importJobs, importFile, spec, SUPPORTED_PROTOCOLS };
+module.exports = { start, importJobs, spec, SUPPORTED_PROTOCOLS };

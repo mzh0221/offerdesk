@@ -13,7 +13,7 @@ test('全新环境离线 OCR、编辑预填、原文保存与重启', async () =
   let app = await launch();
   try {
     let page = await app.firstWindow();
-    await expect(page.getByRole('heading', { name: '岗位与投递', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '让 AI 帮你找机会', exact: true })).toBeVisible();
     // OCR worker itself denies HTTP/HTTPS and fetch; models come from the bundle.
     const data = await page.evaluate(() => {
       const canvas = document.createElement('canvas'); canvas.width = 1400; canvas.height = 760;

@@ -45,6 +45,8 @@
 
 ## 外部 AI 岗位导入
 
-支持具备本地 STDIO MCP 能力的 AI harness 导入批量岗位，提供 WorkBuddy、DeepSeek Harness（Cordis 插件）、ZCode、Codex、Claude、Cursor、Gemini CLI、VS Code、Cline、OpenCode 配置模板与豆包工作的 JSON 文件交付提示词；增加 JSON 文件和本机 CLI 兼容入口，应用须已打开。采集和筛选由外部 AI 工具承担；OfferDesk 不内置爬虫或远程模型。每批最多50条，包含招聘正文、详情链接与字段；校验、去重后创建待核对草稿，人工确认后保存为正式岗位。MCP 通过受凭据保护的本机 IPC 接入，保留现有页面安全隔离和 IndexedDB 标识。旧数据无需迁移。配置与格式见 `docs/import.md`。
+支持具备本地 STDIO MCP 能力的 AI harness 导入批量岗位，使用卡片选择 Codex、Claude、DeepSeek Harness（DSH / Cordis 插件）、ZCode、WorkBuddy 或 OpenCode，仅保留这六个 MCP 接入模板。外部 AI 岗位导入仅通过 MCP 服务，不提供 JSON 文件或 CLI 文件导入入口；应用须已打开。采集和筛选由外部 AI 工具承担；OfferDesk 不内置爬虫或远程模型。每批最多50条、4MB，包含招聘正文、详情链接与字段；校验、去重后创建待核对草稿，人工确认后保存为正式岗位。MCP 通过受凭据保护的本机 IPC 接入，保留现有页面安全隔离和 IndexedDB 标识。已有岗位与历史导入草稿保留，无需迁移。配置与格式见 `docs/import.md`。
 
 直接粘贴招聘文字的录入入口已移除。截图 OCR 的原文编辑与预填保留；既有文字草稿和外部 AI 导入草稿直接进入核对页面，保留原文和字段，不删除旧数据。
+
+本机 MCP 接入支持检测与预览后自动配置：Codex 使用可用的官方 CLI；Claude Code / Desktop、WorkBuddy、ZCode 合并对应的用户配置，OpenCode 优先使用官方 CLI，DSH 保留指定会话加载补丁的方式。只更新 OfferDesk 条目，保留其他设置；拒绝覆盖预览后变化的配置、错误格式与链接文件。桌面主进程执行固定客户端路径和命令，页面不获得文件或进程权限。自动配置后进行只读 MCP 自检，并明确区分“配置已写入 / 服务可用”与“客户端已连接”，不强制重启客户端。

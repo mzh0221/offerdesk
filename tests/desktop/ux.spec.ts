@@ -17,6 +17,41 @@ async function closeCapture(page: Page) {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
+test('正常与减少动态效果模式下，AI 工具切换、键盘操作和小窗口保持可用', async () => {
+  const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-motion-'));
+  const app = await launch(profile);
+  try {
+    const page = await app.firstWindow();
+    for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+      await page.emulateMedia({ reducedMotion });
+      if (reducedMotion === 'reduce') await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(760, 560));
+      const entry = page.getByRole('button', { name: 'AI 采集与导入', exact: true });
+      await entry.click();
+      const picker = page.getByRole('group', { name: '选择 AI 工具' });
+      await picker.getByRole('button', { name: 'Claude', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('region', { name: 'Claude 接入配置' })).toBeVisible();
+      await picker.getByRole('button', { name: 'DSH', exact: true }).focus();
+      await page.keyboard.press('Space');
+      await expect(page.getByLabel('Cordis 补丁')).toContainText('@deepseek-ai/dsh-mcp-client');
+      await picker.getByRole('button', { name: 'OpenCode', exact: true }).click();
+      await expect(page.getByRole('region', { name: 'OpenCode 接入配置' })).toBeVisible();
+      await expect(picker.locator('[aria-pressed=true]')).toHaveCount(1);
+      expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+      if (reducedMotion === 'reduce') {
+        expect(await page.evaluate(() => document.getAnimations().filter(animation => animation.playState === 'running' || animation.pending).length)).toBe(0);
+        await page.screenshot({ path: 'test-results/motion-reduced-small.png', animations: 'disabled' });
+      }
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(entry).toBeFocused();
+    }
+  } finally {
+    await app.close();
+    await rm(profile, { recursive: true, force: true, maxRetries: 5 });
+  }
+});
+
 test('原文、人工核对和手动草稿重启恢复；多草稿可选择和丢弃', async () => {
   const profile = await mkdtemp(path.join(tmpdir(), 'offerdesk-ux-drafts-'));
   let app = await launch(profile);

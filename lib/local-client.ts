@@ -1,4 +1,4 @@
-import { localRequest, getScreenshotUrl, getScreenshotFile, saveImportDraft, importExternalJobs } from './local-store';
+import { localRequest, getScreenshotUrl, getScreenshotFile, saveImportDraft } from './local-store';
 import { looksLikeImage, validateImage } from './domain';
 import { uploadsSchema } from './schema';
 
@@ -23,11 +23,4 @@ async function draft(id: string | null, body: Record<string, unknown>, files?: F
     if (files !== undefined) await validateScreenshots(files);
     return saveImportDraft(id, body, files);
 }
-async function importJson(file: File) {
-    if (file.size > 4 * 1024 * 1024) throw new Error('文件超过4MB，请拆分批次');
-    let body: unknown;
-    try { body = JSON.parse((await file.text()).replace(/^\uFEFF/, '')); }
-    catch { throw new Error('文件不是有效 JSON'); }
-    return importExternalJobs(body);
-}
-export const localClient = { importJson, request: localRequest, draft, image: getScreenshotUrl, file: getScreenshotFile };
+export const localClient = { request: localRequest, draft, image: getScreenshotUrl, file: getScreenshotFile };

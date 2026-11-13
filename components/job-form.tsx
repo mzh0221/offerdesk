@@ -1,4 +1,5 @@
 import type { Fields } from '@/lib/domain';
+import Select from './select';
 const textFields: [
     keyof Fields,
     string,
@@ -26,10 +27,10 @@ export default function JobForm({ value, onChange, children }: {
             <summary>岗位条件（选填）</summary>
             <div className="form-grid">
                 {textFields.slice(4).map(input)}
-                <label>岗位类型<select value={value.job_type || ''} onChange={e => onChange({ ...value, job_type: e.target.value || null })}>
+                <label>岗位类型<Select value={value.job_type || ''} onChange={e => onChange({ ...value, job_type: e.target.value || null })}>
                     <option value="">未填写</option>{['实习', '校招', '社招'].map(t => <option key={t}>{t}</option>)}
                     {value.job_type && !['实习', '校招', '社招'].includes(value.job_type) && <option>{value.job_type}</option>}
-                </select></label>
+                </Select></label>
                 <label>技能标签<input maxLength={600} value={value.tags.join(',')} placeholder="Java, Spring Boot, SQL"
                     onChange={e => onChange({ ...value, tags: e.target.value.split(/[,，]/) })}/></label>
             </div>

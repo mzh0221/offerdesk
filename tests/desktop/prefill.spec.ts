@@ -40,7 +40,7 @@ test('旧文字草稿恢复：无标签手机版式预填、核对修改、保�
       args: [...(process.env.OFFERDESK_TEST_EXECUTABLE ? [] : ['desktop']), `--user-data-dir=${profile}`],
     });
     const page = await app.firstWindow();
-    await expect(page.getByRole('heading', { name: '岗位与投递', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '让 AI 帮你找机会', exact: true })).toBeVisible();
     return page;
   };
   const raw = `表单测试科技有限公司

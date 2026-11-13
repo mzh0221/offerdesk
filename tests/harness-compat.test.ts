@@ -10,11 +10,22 @@ test('不同客户端配置保留包含中文、空格和Windows反斜线的命�
     for (const command of ['/Applications/Offer Desk.app/Contents/MacOS/OfferDesk', 'C:\\Users\\用户\\Offer Desk\\OfferDesk.exe']) {
         const args = ['--offerdesk-mcp', '--user-data-dir=/目录/空 格'];
         const configs = harnessConfigs(command, args);
-        for (const config of configs.filter((item: any) => item.id !== 'codex' && item.kind !== 'file')) {
+        for (const config of configs) {
+            assert.equal(config.setup.steps.length, 3);
+            assert.equal(config.connection.command, command);
+            assert.deepEqual(config.connection.args, args);
+            assert.equal(config.connection.cwd, command.startsWith('C:') ? 'C:\\Users\\用户\\Offer Desk' : '/Applications/Offer Desk.app/Contents/MacOS');
+            assert.ok(config.verifyPrompt.includes('get_import_spec'));
+            assert.ok(config.taskPrompt.includes('import_jobs'));
+        }
+        for (const config of configs.filter((item: any) => item.id !== 'codex')) {
             const value = JSON.parse(config.config);
-            const entry = value.mcpServers?.offerdesk || value.servers?.offerdesk || value[0]?.insert[0]?.config || (value.mcp?.servers?.offerdesk?.type === 'stdio' ? value.mcp.servers.offerdesk : undefined);
-            if (entry) { assert.equal(entry.command, command); assert.deepEqual(entry.args, args); }
-            else assert.deepEqual((value.mcp.servers?.offerdesk || value.mcp.offerdesk).command, [command, ...args]);
+            const entry = value.mcpServers?.offerdesk || value[0]?.insert[0]?.config || value.mcp?.servers?.offerdesk;
+            assert.ok(entry);
+            if (config.id === 'opencode') {
+                assert.deepEqual(entry.command, [command, ...args]);
+                assert.equal(entry.type, 'local'); assert.equal(entry.protocol, 'legacy');
+            } else { assert.equal(entry.command, command); assert.deepEqual(entry.args, args); }
         }
         const codex = configs.find((item: any) => item.id === 'codex').config;
         assert.equal(JSON.parse(codex.split('\n')[1].slice('command = '.length)), command);
@@ -52,8 +63,9 @@ for (const directDescriptor of [false, true]) test(`MCP版本协商、目录探�
     } finally { lines.close(); child.kill(); }
 });
 
-test('WorkBuddy、DSH与ZCode采用各自配置格式；豆包只提供文件方案', () => {
+test('仅提供六个 MCP 客户端模板，并保留各自配置格式', () => {
     const configs = harnessConfigs('/Applications/OfferDesk.app/Contents/MacOS/OfferDesk', ['--offerdesk-mcp']);
+    assert.deepEqual(configs.map((item: any) => item.id), ['codex', 'claude', 'deepseek-harness', 'zcode', 'workbuddy', 'opencode']);
     const get = (id: string) => configs.find((item: any) => item.id === id);
     assert.equal(JSON.parse(get('workbuddy').config).mcpServers.offerdesk.command, '/Applications/OfferDesk.app/Contents/MacOS/OfferDesk');
     const patch = JSON.parse(get('deepseek-harness').config)[0].insert[0];
@@ -64,9 +76,4 @@ test('WorkBuddy、DSH与ZCode采用各自配置格式；豆包只提供文件方
     assert.equal(zcode.features.mcp, true);
     assert.equal(zcode.mcp.servers.offerdesk.type, 'stdio');
     assert.equal(zcode.mcp.servers.offerdesk.protocolVersion, 'legacy');
-    const doubao = get('doubao-work');
-    assert.equal(doubao.kind, 'file');
-    assert.ok(doubao.taskPrompt.includes('jobs.json'));
-    assert.equal(JSON.parse(doubao.config).jobs.length, 1);
-    assert.ok(!doubao.taskPrompt.includes('mcp-connection.json'));
 });

@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('localOcr', {
 
 contextBridge.exposeInMainWorld('externalImports', {
   configs: () => ipcRenderer.invoke('external-import:configs'),
+  copyText: text => ipcRenderer.invoke('external-import:copy', text),
+  prepareAuto: (id, variant) => ipcRenderer.invoke('external-import:auto-prepare', id, variant),
+  applyAuto: token => ipcRenderer.invoke('external-import:auto-apply', token),
+  checkService: () => ipcRenderer.invoke('external-import:service-check'),
   listen: callback => {
     const listener = (_event, id, body) => callback(id, body);
     ipcRenderer.on('external-import:request', listener);
